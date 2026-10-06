@@ -1,0 +1,6 @@
+# Development tools, pinned exactly. Generate has no third-party runtime dependency.
+[tools]
+lute = "luau-lang/lute@1.0.1-nightly.20261006"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.70.1"
+rojo = "rojo-rbx/rojo@7.7.1"
+stylua = "JohnnyMorganz/StyLua@2.5.2"

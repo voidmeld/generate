@@ -1,0 +1,4 @@
+.lute/
+build/
+*.rbxm
+*.rbxmx
