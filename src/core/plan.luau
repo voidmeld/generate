@@ -22,10 +22,6 @@ local function fingerprint(plan: Plan): string
 	}
 end
 
-local function copyMap(map: Types.StringMap?): Types.StringMap
-	return table.clone(map or {})
-end
-
 local function copyUnique(values: { string }?, label: string): { string }
 	local result: { string } = {}
 	local seen: { [string]: boolean } = {}
@@ -77,15 +73,17 @@ local function compile(brief: AssetBrief, drafts: { StageDraft }): Plan
 			error(("Generate plan stage %q estimatedCostMicros must be a non-negative integer"):format(draft.id), 2)
 		end
 		Secret.validate(draft.parameters or {}, ("Generate plan stage %s parameters"):format(draft.id))
+		local requirements = copyUnique(draft.requires, "Generate stage requirements")
+		table.sort(requirements)
 		seen[draft.id] = true
 		local stage: Stage = {
 			id = draft.id,
 			operation = draft.operation,
 			dependsOn = dependencies,
-			requires = Canonical.sortedStrings(copyUnique(draft.requires, "Generate stage requirements")),
+			requires = requirements,
 			mutation = mutation,
 			rollback = rollback,
-			parameters = copyMap(draft.parameters),
+			parameters = table.clone(draft.parameters or {}),
 			deterministic = draft.deterministic == true,
 			estimatedCostMicros = estimatedCostMicros,
 		}

@@ -71,6 +71,7 @@ local brief = Generate.brief {
 
 `Generate.plan` turns a brief into ordered stages. It orders the declared `generate`, `import`, `transform`, `verify`, `review`, `publish` and `custom` operations.
 A dependency must refer backward. Every mutation declares rollback.
+Plans copy dependency and requirement lists and sort requirements. Parameter maps are shallow copies.
 
 ```luau
 local plan = Generate.plan(brief, {

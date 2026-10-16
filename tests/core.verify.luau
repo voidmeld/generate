@@ -251,6 +251,20 @@ describe("Generate briefs and plans", function()
 		expect(Generate.plan(value, stages).fingerprint):toEqual(Generate.plan(value, stages).fingerprint)
 	end)
 
+	it("sorts copied requirements and keeps stage drafts independent", function()
+		local requirements = { "transform", "generate" }
+		local parameters = { shape = "wall" }
+		local plan = Generate.plan(brief(), {
+			{ id = "make", operation = "generate", requires = requirements, parameters = parameters },
+		})
+		expect(plan.stages[1].requires):toEqual { "generate", "transform" }
+		expect(requirements):toEqual { "transform", "generate" }
+		plan.stages[1].requires[1] = "verify"
+		plan.stages[1].parameters.shape = "tower"
+		expect(requirements):toEqual { "transform", "generate" }
+		expect(parameters.shape):toEqual "wall"
+	end)
+
 	it("refuses unknown dependencies and unsafe mutation plans", function()
 		expect(function()
 			Generate.plan(brief(), { { id = "late", operation = "custom", dependsOn = { "missing" } } })
