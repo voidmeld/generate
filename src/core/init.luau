@@ -10,6 +10,7 @@ local Publication = require "./core/publication"
 local Plan = require "./core/plan"
 local Provenance = require "./core/provenance"
 local Review = require "./core/review"
+local ReceiptModel = require "./core/receipt"
 local Revision = require "./core/revision"
 local Types = require "./core/types"
 
@@ -117,7 +118,7 @@ return {
 	reconcilePublication = Publication.reconcile,
 	publicationFault = Publication.recordFault,
 	hostVerified = Publication.hostVerified,
-	receiptFingerprint = Execution.receiptFingerprint,
+	receiptFingerprint = ReceiptModel.fingerprint,
 	manifest = Manifest.create,
 	plan = Plan.compile,
 	reviewPacket = Review.packet,

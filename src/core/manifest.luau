@@ -1,7 +1,7 @@
 --!strict
 
 local Canonical = require "./canonical"
-local Execution = require "./execution"
+local ReceiptModel = require "./receipt"
 local Provenance = require "./provenance"
 local Review = require "./review"
 local Types = require "./types"
@@ -16,7 +16,7 @@ local function create(receipt: Receipt, artifactIds: { string }): DeliveryManife
 	if receipt.status ~= "accepted" then
 		error("Generate manifest requires an accepted receipt", 2)
 	end
-	if receipt.fingerprint ~= Execution.receiptFingerprint(receipt) then
+	if receipt.fingerprint ~= ReceiptModel.fingerprint(receipt) then
 		error("Generate manifest refuses a receipt changed after execution", 2)
 	end
 	if #artifactIds == 0 then

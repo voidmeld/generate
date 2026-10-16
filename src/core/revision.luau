@@ -19,13 +19,7 @@ export type RevisionEntryDraft = {
 	candidateFingerprint: string?,
 }
 
-export type RevisionEntry = {
-	revision: number,
-	producer: string,
-	outcome: RevisionOutcome,
-	packetId: string?,
-	candidateFingerprint: string?,
-}
+export type RevisionEntry = RevisionEntryDraft
 
 export type RevisionLedger = {
 	schemaVersion: number,
