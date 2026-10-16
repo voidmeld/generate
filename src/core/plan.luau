@@ -91,15 +91,15 @@ local function compile(brief: AssetBrief, drafts: { StageDraft }): Plan
 		}
 		table.insert(stages, stage)
 	end
-	local partial = {
+	local result: Plan = {
 		schemaVersion = SCHEMA_VERSION,
 		id = brief.id .. "/production",
 		briefId = brief.id,
 		briefFingerprint = Brief.fingerprint(brief),
 		stages = stages,
+		fingerprint = "",
 	}
-	local result = table.clone(partial)
-	result.fingerprint = Canonical.fingerprint(partial)
+	result.fingerprint = fingerprint(result)
 	return result
 end
 

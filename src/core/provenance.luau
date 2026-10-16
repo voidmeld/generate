@@ -120,6 +120,23 @@ local function digests(values: { string }?, label: string): { string }
 	return result
 end
 
+local function fingerprintOf(value: Derivation): string
+	return Canonical.fingerprint {
+		schemaVersion = value.schemaVersion,
+		artifactId = value.artifactId,
+		artifactDigest = value.artifactDigest,
+		origin = value.origin,
+		parents = value.parents,
+		inputDigests = value.inputDigests,
+		referenceDigests = value.referenceDigests,
+		invocation = value.invocation,
+		environment = value.environment,
+		attempt = value.attempt,
+		disposition = value.disposition,
+		rights = value.rights,
+	}
+end
+
 local function derivation(draft: DerivationDraft): Derivation
 	if type(draft) ~= "table" then
 		error("Generate.derivation expects a table", 2)
@@ -157,7 +174,7 @@ local function derivation(draft: DerivationDraft): Derivation
 			error("Generate derivation invocation requires exact tool, version, and parameter identity", 2)
 		end
 	end
-	local partial = {
+	local result: Derivation = {
 		schemaVersion = SCHEMA_VERSION,
 		artifactId = draft.artifactId,
 		artifactDigest = draft.artifactDigest,
@@ -170,27 +187,10 @@ local function derivation(draft: DerivationDraft): Derivation
 		attempt = attempt,
 		disposition = disposition,
 		rights = rights(draft.rights),
+		fingerprint = "",
 	}
-	local result = table.clone(partial)
-	result.fingerprint = Canonical.fingerprint(partial)
+	result.fingerprint = fingerprintOf(result)
 	return result
-end
-
-local function fingerprintOf(value: Derivation): string
-	return Canonical.fingerprint {
-		schemaVersion = value.schemaVersion,
-		artifactId = value.artifactId,
-		artifactDigest = value.artifactDigest,
-		origin = value.origin,
-		parents = value.parents,
-		inputDigests = value.inputDigests,
-		referenceDigests = value.referenceDigests,
-		invocation = value.invocation,
-		environment = value.environment,
-		attempt = value.attempt,
-		disposition = value.disposition,
-		rights = value.rights,
-	}
 end
 
 local function withDisposition(value: Derivation, disposition: Types.CandidateDisposition): Derivation

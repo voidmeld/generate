@@ -929,7 +929,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 		records[index] = updated
 	end
 
-	local payload = {
+	local result: Receipt = {
 		schemaVersion = RECEIPT_SCHEMA_VERSION,
 		id = plan.id .. "/receipt",
 		briefId = brief.id,
@@ -951,9 +951,9 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 		derivations = finalDerivations,
 		limitations = limitations,
 		costMicros = costMicros,
+		fingerprint = "",
 	}
-	local result = table.clone(payload)
-	result.fingerprint = Canonical.fingerprint(payload)
+	result.fingerprint = receiptFingerprint(result)
 	return result
 end
 
