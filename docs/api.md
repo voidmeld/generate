@@ -330,7 +330,7 @@ Use `Roblox.delivery.upload` to save one reviewed file.
 `Roblox.delivery.upload(config, request)` takes these fields:
 
 - `label`, `bytes`, `name`, `description`
-- `format`: `png`, `wav`, `mp3`, `ogg`, `rbxm` or `rbxmx`. The binary and XML instance formats request `Animation`, not `Model`.
+- `format`: `png`, `wav`, `mp3`, `ogg`, `rbxm`, `rbxmx`, `fbx`, `gltf` or `glb`. The binary and XML instance formats request `Animation`; FBX and glTF formats request `Model`, following the [Assets API file formats](https://create.roblox.com/docs/cloud/guides/usage-assets#supported-asset-types-and-limits). The consumer supplies a complete model payload, including its required resources.
 - `review`: `by`, `verdict = "complies"`, `shows`, and the `sha256` of those exact bytes
 
 The function runs these steps:

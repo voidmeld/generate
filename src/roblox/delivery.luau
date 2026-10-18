@@ -156,6 +156,9 @@ local FORMATS: { [string]: { assetType: string, contentType: string } } = {
 	ogg = { assetType = "Audio", contentType = "audio/ogg" },
 	rbxm = { assetType = "Animation", contentType = "model/x-rbxm" },
 	rbxmx = { assetType = "Animation", contentType = "model/x-rbxm" },
+	fbx = { assetType = "Model", contentType = "model/fbx" },
+	gltf = { assetType = "Model", contentType = "model/gltf+json" },
+	glb = { assetType = "Model", contentType = "model/gltf-binary" },
 }
 
 local function applyExtra(value: Result, extra: Extra)
@@ -548,7 +551,7 @@ local function upload(config: Config, request: UploadRequest): Result
 	end
 	local format = FORMATS[request.format]
 	if format == nil then
-		return stop("invalid", "supported formats are png, wav, mp3, ogg, rbxm and rbxmx")
+		return stop("invalid", "supported formats are png, wav, mp3, ogg, rbxm, rbxmx, fbx, gltf and glb")
 	end
 	if type(request.name) ~= "string" or request.name == "" or #request.name > 50 then
 		return stop("invalid", "the display name must contain 1 to 50 bytes")

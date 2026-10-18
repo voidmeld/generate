@@ -145,6 +145,43 @@ local function request(): Roblox.DeliveryUpload
 end
 
 describe("file upload", function()
+	local modelFormats: { [string]: string } =
+		{ fbx = "model/fbx", gltf = "model/gltf+json", glb = "model/gltf-binary" }
+	for format, contentType in modelFormats do
+		it("delivers reviewed " .. format .. " model bytes and resumes the same operation", function()
+			local r = rig()
+			local model = request()
+			model.label = "models/fixture." .. format
+			model.format = format
+			r.push(created())
+			r.push { status = 200, body = json.serialize { done = false } }
+			expect(Delivery.upload(r.config, model).reason):toBe "pending"
+			local body = assert(r.requests[1].body)
+			expect(string.find(body, 'filename="asset.' .. format .. '"', 1, true) ~= nil):toBe(true)
+			expect(string.find(body, "Content-Type: " .. contentType .. "\r\n", 1, true) ~= nil):toBe(true)
+			expect(string.find(body, BYTES, 1, true) ~= nil):toBe(true)
+			local envelope =
+				json.deserialize(assert(string.match(body, "application/json\r\n\r\n(.-)\r\n%-%-"))) :: { assetType: string }
+			expect(envelope.assetType):toBe "Model"
+			r.push(operationDone())
+			r.push {
+				status = 200,
+				body = json.serialize {
+					assetId = "12345",
+					revisionId = "7",
+					assetType = "Model",
+					creationContext = { creator = { groupId = "1234567" } },
+					moderationResult = { moderationState = "Approved" },
+				},
+			}
+			local settled = Delivery.upload(r.config, model)
+			expect(settled.verdict):toBe "approved"
+			expect(settled.assetId):toBe "12345"
+			expect(settled.version):toBe "7"
+			expect(r.posts()):toBe(1)
+		end)
+	end
+
 	it("holds malformed readback field shapes without approving delivery", function()
 		local cases: { { field: string, value: json.Value } } = {
 			{ field = "creationContext", value = "context" },
