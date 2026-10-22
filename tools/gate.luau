@@ -38,7 +38,7 @@ local function check(id: string, argv: { string }, tier: string): Gate.ProducerD
 end
 
 local format: { string } = { "stylua", "--check", "lint.config.luau" }
-local lint: { string } = { "lute", "lint", "-c", "lint.config.luau" }
+local lint: { string } = { "lute", "lint", "--verbose", "-c", "lint.config.luau" }
 local types: { string } = {
 	"luau-lsp",
 	"analyze",
