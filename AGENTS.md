@@ -30,5 +30,7 @@ This file owns the contribution rules. Each fact has one owning document.
 
 ## Repository
 
+Changes to this library use a pull request to `main` and the required `Gate` check. Do not push directly to `main` or bypass a failing check.
+
 Use author and committer `voidmeld <158495725+voidmeld@users.noreply.github.com>`. Add no attribution trailers.
 Keep history append-only unless the repository owner authorizes a rewrite.
