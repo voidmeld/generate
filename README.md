@@ -85,6 +85,8 @@ The [architecture](docs/architecture.md) lists each public package root (`src/co
 
 ## Validate
 
+GitHub Actions runs the repository gate as the `Gate` check using the pinned tools and SDK types. Follow the [contribution rules](AGENTS.md).
+
 Run `lute run tools/gate.luau`. It is the one command that checks this repository.
 Every test file and every example is a producer of this gate. Use these commands to run a part:
 
