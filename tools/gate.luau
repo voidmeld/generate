@@ -91,6 +91,7 @@ local producers: { Gate.ProducerDraft } = {
 	},
 	check("dependency-sync", { "lute", "run", "tools/sync-dependencies.luau" }, "fast"),
 	check("type-policy", { "lute", "run", "tools/check-no-any.luau" }, "fast"),
+	check("spec-style", { "lute", "run", "tools/check-spec-style.luau" }, "fast"),
 	check("format", format, "fast"),
 	check("lint", lint, "fast"),
 	check("types", types, "fast"),

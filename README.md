@@ -100,6 +100,7 @@ Every test file and every example is a producer of this gate. Use these commands
 | Repeat what the last run did not pass | `lute run tools/gate.luau --rerun` |
 | Explain why a producer or case ran or failed | `lute run tools/gate.luau --explain tests` |
 | List the producers | `lute run tools/gate.luau --list` |
+| Check compact spec style | `lute run tools/gate.luau --only spec-style` |
 | Measure the execution hot path | `lute run tools/gate.luau --benchmark --only benchmark` |
 
 A narrowed run prints `NARROWED`. It is not the gate. [AGENTS](AGENTS.md#validate) states when to run which.

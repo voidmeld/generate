@@ -8,6 +8,10 @@ Run `lute lint -c lint.config.luau` to check the repository source. Lute reports
 The pinned Verify `checks` package supplies the CST rule banning ambient `_G` and `shared` authority.
 Repository checks use `tools/checks-config.luau` and Generate policy in `tools/checks-policy.luau`.
 
+The fast gate runs `tools/check-spec-style.luau` through Verify's `Checks.specStyle`.
+Specs bind `describe`, `it` and `expect` once from `Bdd.create` and use those local functions.
+The selection excludes `tests/adapters.lute.verify.luau`, which tests Verify's raw harness API.
+
 The gate analyzes `src`, `tests`, `tools`, `bench`, `examples`, `lint.config.luau` and the dependency lock in `.luaurc` strict mode.
 Standalone fixtures and tests also declare `--!strict`.
 Run the full gate on final source changes, as [AGENTS](../AGENTS.md) requires.
