@@ -1,7 +1,9 @@
 # Architecture
 
-Generate converts a brief and consumer authority into deterministic plans, retained artifacts, revision-bound review and receipts.
-Core owns records. Hosts own effects. Consumers own taste, budgets, credentials, destinations, rights policy and final runtime acceptance.
+Generate makes plans and records from a brief and consumer authority.
+Records bind review to retained candidate revisions.
+Core owns records. Hosts perform effects.
+Consumers own art direction, budgets, credentials, destinations, rights policy and final runtime acceptance.
 
 | Boundary | Responsibility |
 | --- | --- |
@@ -16,7 +18,8 @@ Core owns records. Hosts own effects. Consumers own taste, budgets, credentials,
 
 Core imports no provider, filesystem, engine or scene framework. Core names no host. A host is an adapter. `tools/check-boundary.luau` enforces this rule.
 A manifest is data. The consumer can load it through its own scene system.
-Generate records stochastic outputs. Planning does not make a provider deterministic.
+Generate records outputs that can vary between runs.
+A plan does not make a provider deterministic.
 `gen-fp2` is a bookkeeping fingerprint. It is not a signature and grants no authority.
 Artifact SHA-256 digests bind bytes. They do not bind truthfulness or rights.
 
@@ -35,3 +38,12 @@ Test production receipts with ordinary Verify cases.
 Close over the receipt and assert through the case context.
 Use the same host binding, deadline, evidence and report APIs as other tests.
 Generate adds no test authoring format and does not wrap Verify run options.
+
+## Internal modules
+
+Image `qa-metrics` measures pixels. Image `qa` applies declared limits.
+Roblox `asset-publication-stage` validates grants and binds stage results.
+Roblox `asset-publication` supplies transport and transaction recovery.
+Core `execution-validation` checks artifact and cost records.
+Core `execution` controls stage order, review and recovery.
+These modules do not add public package roots.

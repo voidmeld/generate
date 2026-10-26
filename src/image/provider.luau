@@ -307,9 +307,6 @@ return {
 	withinRoot = withinRoot,
 	withinEitherRoot = withinEitherRoot,
 	paths = paths,
-	references = references,
 	invocation = invocation,
-	replyPath = replyPath,
-	normalizedReply = normalizedReply,
 	runStage = runStage,
 }

@@ -163,7 +163,6 @@ local function fingerprint(brief: Brief): string
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
 	create = create,
 	fingerprint = fingerprint,
 }

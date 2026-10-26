@@ -1,19 +1,6 @@
-# Documentation index
+# Terms
 
-This index maps each Generate document to the task that it serves.
-
-| Document | Use it to |
-| --- | --- |
-| [Getting started](getting-started.md) | Write a production brief. |
-| [API](api.md) | Call a public package root. |
-| [Architecture](architecture.md) | Change ownership or dependencies. |
-| [Adapters](adapters.md) | Bind a provider or platform. |
-| [Evidence](evidence.md) | Check what a claim proves. |
-| [Lint](lint.md) | Investigate a diagnostic. |
-| [Native tools](native-codegen.md) | Add work that is not Luau. |
-| [Benchmarks](benchmarks.md) | Measure, store and compare the execution hot path. |
-| [Validate](../README.md#validate) | Run the gate, one test file or one case. |
-| [Provenance](../PROVENANCE.md) | Assess the origin or license of the source. |
+Use the [README](../README.md) to select a document.
 
 ## Terms
 

@@ -364,11 +364,8 @@ local function binds(review: ResolvedReview, artifactId: string, digest: string)
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
 	packet = packet,
 	decision = decision,
 	resolve = resolve,
 	binds = binds,
-	candidateFingerprint = candidateFingerprint,
-	evidenceFingerprint = evidenceFingerprint,
 }

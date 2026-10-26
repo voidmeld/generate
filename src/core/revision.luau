@@ -231,8 +231,6 @@ local function roll(current: RevisionLedger, draft: RollDraft): CandidateRevisio
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
-	OUTCOMES = OUTCOMES,
 	ledger = ledger,
 	entryFor = entryFor,
 	outcomeFor = outcomeFor,

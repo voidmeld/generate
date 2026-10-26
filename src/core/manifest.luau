@@ -107,6 +107,5 @@ local function create(receipt: Receipt, artifactIds: { string }): DeliveryManife
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
 	create = create,
 }

@@ -274,7 +274,6 @@ end
 
 return {
 	facts = facts,
-	valid = valid,
 	apply = apply,
 	run = run,
 }
