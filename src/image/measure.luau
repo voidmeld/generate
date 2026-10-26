@@ -118,7 +118,6 @@ end
 
 return {
 	MEDIA_TYPE = MEDIA_TYPE,
-	PNG_SIGNATURE = PNG_SIGNATURE,
 	pngDimensions = pngDimensions,
 	measure = measure,
 	artifact = artifact,

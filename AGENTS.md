@@ -2,7 +2,7 @@
 
 Generate is a content generation library for Luau. It owns production plans, candidate records and review bindings.
 Consumers own art direction, tools, rights, credentials, destinations, acceptance and deployment.
-The [README](README.md) maps the tasks. Read [architecture](docs/architecture.md) for boundary changes and only the relevant [contract](docs/index.md).
+The [README](README.md) maps the tasks. Read [architecture](docs/architecture.md) for boundary changes and the relevant [contract](docs/api.md).
 
 This file owns the contribution rules. Each fact has one owning document.
 

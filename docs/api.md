@@ -14,33 +14,35 @@ Core owns those records. The consumer supplies art direction, host operations an
 | Produce and review an image | [Image lane](#image-lane) |
 | Check an authored brief | [Brief diagnostics](#brief-diagnostics) |
 
-The examples use the public package roots. Replace the path with the location of your mounted package:
+The examples use public package roots. Replace the path with your package location:
 
 ```luau
 local Generate = require(path.to.generate.core)
 ```
 
 The exported Luau types define the record fields. This page explains their contracts.
-Every public function appears here with its full name. The [architecture](architecture.md) page owns the public package map. The [getting started guide](getting-started.md) owns the workflow.
+This page lists every public function. Use the [architecture](architecture.md) for package responsibilities.
+Use [getting started](getting-started.md) for the procedure.
+Modules below package roots are internal. Their helper exports are not public contracts.
 The [terms](index.md#terms) define the words that this page uses.
 
 ---
 
 ## Brief, plan and execution
 
-A brief declares an asset, a plan orders its stages and execution runs them under authority.
+A brief declares an asset. A plan orders its stages. Execution runs the stages under authority.
 
 ### `Generate.brief`
 
 `brief(draft) -> Brief`
 
-`Generate.brief` declares one asset. It normalizes a schema-v1 brief: identity, kind, intent, delivery, review and provenance.
+`Generate.brief` declares one asset. It makes a schema-v1 record with identity, kind, intent, delivery, review and provenance.
 
 - Every contract requires exactly one decision. One decision covers the entire rubric.
-- The contract has no decision count and no rule. `independence` normalizes to `required`.
+- The contract has no decision count and no rule. The default for `independence` is `required`.
 - Review declares the rubric identity and fingerprint, the canonical views and the blindness.
-- `independence = "optional"` explicitly permits a producer inspection in a shared context. Record the real actor and `blind = false`. Consumer policy decides which intermediate inputs allow this mode. Finished assets normally keep required independence.
-- A change to the contract changes the brief fingerprint. It invalidates earlier receipt bindings. A receipt that an earlier version made does not verify, because the review fields changed.
+- `independence = "optional"` permits a producer inspection in a shared context. Record the real actor. Set `blind = false`. Consumer policy decides which intermediate inputs allow this mode. Finished assets usually require independence.
+- A change to the contract changes the brief fingerprint. It invalidates earlier receipt bindings. Earlier receipts fail verification when the review fields change.
 - The rights facts are `source`, `license`, `owner` and `consent`. `Generate.RIGHTS_FACT_NAMES` lists them. An unknown fact that the brief requires blocks publication and manifest promotion.
 - Scores and structural refusals remain review data. They cannot override a rejected or unresolved review.
 - `Generate.briefFingerprint(brief)` recomputes the fingerprint of a brief.
@@ -71,7 +73,7 @@ local brief = Generate.brief {
 
 `Generate.plan` turns a brief into ordered stages. It orders the declared `generate`, `import`, `transform`, `verify`, `review`, `publish` and `custom` operations.
 A dependency must refer backward. Every mutation declares rollback.
-Plans copy dependency and requirement lists and sort requirements. Parameter maps are shallow copies.
+Plans copy dependency and requirement lists. Plans sort requirements. Parameter maps are shallow copies.
 
 ```luau
 local plan = Generate.plan(brief, {
@@ -88,21 +90,24 @@ The [modular asset example](../examples/modular-wall.generate.luau) shows a plan
 
 `execute(brief, plan, host, authority) -> Receipt`
 
-`Generate.execute` runs a plan and records a receipt. It intersects the host capabilities with the consumer authority. It checks destinations and budgets, and dispatches stable stage idempotency keys.
-If a stage fails, completed mutations compensate newest first. A post-change fault must return its opaque rollback handle.
+`Generate.execute` runs a plan and records a receipt. It uses only host capabilities that consumer authority permits.
+It checks destinations and budgets. It sends a stable idempotency key for each stage.
+If a stage fails, execution compensates completed mutations in reverse order.
+A fault after a change must return its opaque rollback handle.
 
 - Receipts have `schemaVersion` `2`. They bind stages, artifact identities, invocations, derivations, review, economics and recovery.
 - Optional economics records keep the calls, costs and reviewers that the host reports. Unknown values stay absent.
-- Execution measures stage duration. The consumer owns rollups and provider scheduling.
+- Execution measures stage duration. The consumer combines totals and schedules providers.
 - `Generate.canonical(value)` encodes a record deterministically. `Generate.fingerprint(value)` hashes that encoding. `Generate.receiptFingerprint(receipt)` recomputes the binding of a receipt. A fingerprint is not a signature and grants no authority.
-- Stage metadata is an open `{ [string]: unknown }` data map that receipt ingestion checks. The consumer narrows extension fields before use.
+- Stage metadata uses an open `{ [string]: unknown }` data map. Receipt ingestion checks it.
+  The consumer checks extension field types before use.
 - QA facts contain strings, numbers and booleans. Optional measurements stay absent. Generate does not invent them.
 
 ### `Generate.continueReview`
 
 `continueReview(brief, plan, receipt, decisions) -> Receipt`
 
-`Generate.continueReview` adds review decisions to a produced receipt. It resolves new review for one unchanged, completed `produced` receipt. It does not invoke native work again.
+`Generate.continueReview` adds review decisions to a produced receipt. It resolves review for one unchanged, completed `produced` receipt. It does not repeat native work.
 It refuses receipt, brief or plan drift, unknown packets, unfinished runs and completed mutations.
 Later review does not change the production timing and cost.
 
@@ -110,7 +115,7 @@ Later review does not change the production timing and cost.
 
 ## Review and delivery
 
-Review binds one decision to the exact bytes of a candidate, and delivery selects the approved bytes.
+Review binds one decision to exact candidate bytes. Delivery selects the approved bytes.
 Production and acceptance are separate outcomes.
 A produced candidate needs one decision that binds to its exact bytes under [the review contract of the brief](#generatebrief).
 
@@ -127,8 +132,8 @@ A packet holds the exact candidate, evidence and rubric that a reviewer sees. A 
 
 - The packet includes the producer, the requested views and the capture environment.
 - A decision includes the actor, the role, the context and the certainty. A decision that is not an approval needs reasons.
-- A resolved review has `decisions` (the eligible decisions), `excluded`, `disposition` (`approved`, `rejected`, `unresolved`, `incomplete` or `stale`) and `resolution`. It records exclusions for self-review, duplicate actors, drift, and unmet blindness or independence. Each excluded decision names its actor and reason.
-- An extra submission for the same packet, including a duplicate, leaves review unresolved.
+- A resolved review has `decisions` (the eligible decisions), `excluded`, `disposition` (`approved`, `rejected`, `unresolved`, `incomplete` or `stale`) and `resolution`. It excludes self-review, duplicate actors, changed bindings, and unmet blindness or independence. Each excluded decision names its actor and reason.
+- An extra submission for the same packet leaves review unresolved. This includes a duplicate.
 - Changed output makes the prior approval stale. Technical production alone returns `produced`.
 
 ### Revisions and provenance
@@ -143,7 +148,7 @@ Revisions keep consecutive candidate revisions. Provenance records lineage and r
 | Normalize the rights facts of a candidate | `Generate.rights(draft)` |
 | List the lineage and rights faults that block delivery | `Generate.provenanceFaults(derivation, contract, byArtifactId)` |
 
-An open head cannot roll. To supersede an approved head, say so explicitly.
+An open head cannot roll. To replace an approved head, declare that replacement.
 Derivations and rights do not invent rights facts.
 
 ### `Generate.manifest`
@@ -167,7 +172,7 @@ Quotas compare measured values with ceilings. Capture brackets check that eviden
 | Match a refusal reason of a bracket | `Generate.EVIDENCE_BRACKET_REASONS` |
 
 `Generate.evaluateQuota` takes values that the consumer measured. It does not measure native assets and does not choose budgets.
-A bracket requires the exact declared capture order, poses and digest mode. A refused bracket yields no manifest. A bracket does not capture or hash bytes.
+A bracket requires the exact declared capture order, poses and digest mode. A refused bracket gives no manifest. A bracket does not capture or hash bytes.
 
 See [quotas](../examples/asset-quota.generate.luau) and [capture brackets](../examples/evidence-bracket.generate.luau).
 
@@ -179,12 +184,12 @@ A destination says where a brief delivers. A publication record says what happen
 
 ### Declare the destination
 
-A destination tells core where a brief delivers. A brief can declare an optional destination in its `delivery` contract:
+A brief can declare an optional destination in its `delivery` contract:
 
 - `delivery.destination` has an `adapter` name in lowercase and a `descriptor` data table.
 - `delivery.hostVerification` is a boolean. It defaults to `false`. It needs a destination.
 
-Core does not read the descriptor. The adapter that the `adapter` field names owns and validates it.
+Core does not read the descriptor. The named adapter owns and checks it.
 Core refuses a descriptor with a secret-shaped key or a value that is not data.
 Credentials are never brief values. A descriptor can carry only the name of a credential.
 The destination is a record. Generate does not perform the publication.
@@ -220,11 +225,11 @@ The state of a record says how far its destination settled.
 - `Generate.publicationFault(record)` returns the first generic fault of a record, or `nil`.
 
 Each call returns a receipt with a new fingerprint.
-The consumer must use records that its own delivery path produces. It must not substitute hand-authored acceptance assertions.
+Use records from the consumer delivery path. Do not replace them with manually written acceptance claims.
 
 ### Host verification
 
-A host verification record is an observation that the delivered content was exercised in a named host build.
+A host verification record describes a test of delivered content in a named host build.
 It has a `contentId`, a `hostBuild`, an observation window, adapter `measurements`, scanned `diagnostics` and a `verified` or `refused` disposition.
 A `refused` record names a refusal reason.
 
@@ -278,7 +283,9 @@ The transport types are `Roblox.CloudRequest`, `Roblox.CloudResponse` and `Roblo
 | Match a refusal reason | `Roblox.publicationRecord.REFUSAL_REASONS` lists the reasons. |
 | Convert a size to studs | `Roblox.units.studs(size)` converts a size in metres, centimetres or millimetres. One stud is 0.28 metres. |
 
-The destination descriptor has a `creator` (`group` or `user`), an `assetType`, a `visibility` (`private` or `restricted`), a `credentialName`, and optional `assetId`, `displayName`, `description`, `grantUniverses` and `verifyDependencies`.
+The destination descriptor requires `creator`, `assetType`, `visibility` and `credentialName`.
+The `creator` is `group` or `user`. The `visibility` is `private` or `restricted`.
+Optional fields are `assetId`, `displayName`, `description`, `grantUniverses` and `verifyDependencies`.
 Public visibility is refused. `verifyDependencies` needs `grantUniverses`.
 
 The Roblox functions run the Roblox checks and then the generic calls.
@@ -291,10 +298,10 @@ A brief declares `constraints.maxSize = { x, y, z, unit = "m" }`. The unit defau
 
 `Roblox.delivery` saves a reviewed file or a native Studio object and returns a usable asset ID and an optional version.
 It has no brief, plan, receipt or transcript.
-It is plain Luau with no `require`, so one source file can also load in Studio.
+It uses plain Luau with no `require`. The same source file can load in Studio.
 The consumer injects every effect through `Roblox.DeliveryConfig`:
 
-- `creator`: `{ kind = "group" | "user", id }`. It is required. Generate never defaults it, never reads it from the environment and never falls back from a group to a user.
+- `creator`: `{ kind = "group" | "user", id }`. It is required. Generate requires it. Generate does not read it from the environment or replace a group with a user.
 - `privacy` (default `restricted`), `store`, `json`, `sha256`, `now`, `wait`, `polls`, `interval`.
 - `send(request)` and `headers(purpose)`: the transport and the authentication headers. Generate never reads or stores credentials. It redacts the header values from transport error text.
 - `authorize(key)`: optional for file uploads. It runs before a fresh send, including an unsent retry. It returns evidence to record, or `nil, reason` to refuse. Native saves do not call it. The consumer must authorize them before it calls `save`.
@@ -319,7 +326,7 @@ Only `approved` permits the next action.
 
 The consumer owns rights, review authenticity, native-object identity and authorized scope.
 This adapter checks the supplied records. It does not establish independent review and does not enforce the destination of the brief.
-Use a durable store with atomic `create` and with successful writes before effects.
+Use a durable store with atomic `create`. Complete record writes before effects.
 A record is recovery data. It is not an accepted core receipt.
 `stop` ends the assigned action. Recovery needs reconciled evidence.
 
@@ -345,7 +352,7 @@ The record under the SHA-256 of the bytes holds the source label, hash, size, re
 A repeated call resumes from the record.
 
 - `status(config, reference, assetType)` reads an operation path or an asset ID. It does not update a stored attempt.
-- `queue(config, items, options)` uploads one item at a time. It stops at the first result that is not approved and reports each `Row` through `options.log`. Each item prepares its own request lazily.
+- `queue(config, items, options)` uploads one item at a time. It stops at the first result that is not approved and reports each `Row` through `options.log`. Each item prepares its request when the queue reaches it.
 
 A failure after the request left is `ambiguous`.
 To resolve it, find the operation or asset ID outside Generate. Then call `Roblox.delivery.attach(config, key, { operation | assetId })`, which reads it back.
@@ -392,7 +399,16 @@ The grant authorizes exactly one attempt. A failure after the request left is ne
 | Name the disposition of a stage outcome | `Roblox.assetPublication.classify(outcome)` |
 | Match a disposition | `Roblox.assetPublication.DISPOSITIONS` lists every name that a transaction can return. |
 
-A grant has a `schemaVersion` of `1`, an `id`, an `actor`, a `policy`, the `briefFingerprint`, an `idempotencyKey`, the `artifactDigest`, the `semanticId`, a `target`, an `assetType`, a `creator`, an `action` (`create` or `update`), an optional `assetId`, a `visibility` (`private` or `restricted`), `permissionChanges = false` and `maxAttempts = 1`.
+A grant requires these fields:
+
+- `schemaVersion = 1`, `id`, `actor` and `policy`
+- `briefFingerprint`, `idempotencyKey`, `artifactDigest` and `semanticId`
+- `target`, `assetType` and `creator`
+- `action`: `create` or `update`
+- `visibility`: `private` or `restricted`
+- `permissionChanges = false` and `maxAttempts = 1`
+
+The `assetId` field is optional.
 It may also carry a `displayName` and a `description`. Both are then required.
 An update grant binds one existing asset. A create grant binds none.
 
@@ -469,7 +485,15 @@ A reference image is an image that guides generation. The row binds these facts:
 4. The disposition is not the terminal disposition. The consumer sets that one after the dependent content is published and linked back.
 5. The renderer reproduces the rendered table from the current manifest. Then the row is spliced into the manifest text. An existing key is never overwritten.
 
-The `config` names the creator `owner`, the manifest `sections`, the `referenceSection` that receives the rows, the `manifestPath`, the `renderedPath`, the `lineagePath` (a file, a directory or a list of files), the `referenceRoot` and the consumer `render` function. No section name has a default.
+The `config` names these inputs:
+
+- creator `owner`
+- manifest `sections` and the destination `referenceSection`
+- `manifestPath`, `renderedPath` and `referenceRoot`
+- `lineagePath`: a file, directory or list of files
+- consumer `render` function
+
+No section name has a default.
 Optional fields are `terminalDisposition` (default `accepted`) and `activeState` (default `Active`).
 The row has these keys. The audit reads the same keys.
 
@@ -499,7 +523,14 @@ The module reads no credential and makes no request.
 
 `Roblox.assetAudit.referenceViolations(input)` lists the violations of a manifest. It checks that each reference row carries the required fields, a committed original with the recorded digest, a recorded readback and one reviewer verdict.
 It also checks that each model row resolves to exactly one reference by SHA-256 and image asset ID.
-The `config` may name `requiredReferenceFields` and `receiptFields`. Without them, the audit requires `committed_source_path`, `source_sha256`, `prompt_sha256`, `lineage_path`, `reviewer_verdict_receipt`, `reviewer_verdict_anchor`, `image_readback_receipt`, `subject`, `family`, `group`, `rights_basis` and `disposition`, and it checks the receipt fields `lineage_path`, `reviewer_verdict_receipt` and `image_readback_receipt`.
+The `config` may name `requiredReferenceFields` and `receiptFields`. Without them, the audit requires these reference fields:
+
+- `committed_source_path`, `source_sha256` and `prompt_sha256`
+- `lineage_path`, `reviewer_verdict_receipt` and `reviewer_verdict_anchor`
+- `image_readback_receipt`, `subject`, `family` and `group`
+- `rights_basis` and `disposition`
+
+It checks receipt fields `lineage_path`, `reviewer_verdict_receipt` and `image_readback_receipt`.
 
 ### Binary instance files
 
@@ -529,13 +560,13 @@ It does not open a Studio session and does not choose a route.
 - `codec` supplies the JSON `encode` and the `sha256` of the consumer.
 - A request is the bytes `{"arguments":<encoded arguments>,"name":"<tool>"}`. Duplicates and other Studios are refused.
 
-`execute` writes each request before it calls `host.call(tool, argumentsBytes)`. It writes the raw tool result after the call.
+`execute` writes each request before it calls `host.call(tool, argumentsBytes)`. It writes the tool result after the call.
 `host.writeNew` must refuse existing names. Then a second run of the same plan refuses before any call.
 A thrown call is `ambiguous`. A tool error or an undecodable result is `failed`. Both stop the transcript. Neither is retried.
 A `screen_capture` result must hold one base64 image whose PNG or JPEG signature matches its media type. Its decoded bytes are written as a separate file.
 
 `verify` recomputes the plan digest and the grant. It requires the same artifact, Studio, ordered labels, tools and request digests.
-It rereads and hashes every file within `caps.requestBytes`, `responseBytes` and `imageBytes`.
+It reads every file again. It checks file hashes and the limits `caps.requestBytes`, `responseBytes` and `imageBytes`.
 It requires each image file to equal its decoded response.
 It refuses a missing, stopped or reordered call. It refuses an image that the transcript repeats or that `caps.excludedImages` names.
 Hashes bind retained bytes. They do not prove that the host ran the call truthfully.
@@ -561,7 +592,7 @@ Media measures, converts and renders audio for review.
 - Commands use `-y` and overwrite the selected output.
 
 The consumer owns paths, retention, tool versions and invocation evidence.
-Thresholds, recipes and the definition of acceptable stay with the consumer. A measurement is not an audition.
+The consumer sets thresholds, recipes and acceptance criteria. A measurement is not an audition.
 
 ---
 
@@ -582,12 +613,12 @@ These adapters bind a content compiler, a process tool and a reviewer to a stage
 - `Agent.reviewerCli.resolve` selects only the consumer configuration or the named environment variable, through the supplied readers.
 - `Agent.reviewerStream.parse` and `decisions` normalize an event contract that the consumer declares. `decisions` accepts exactly one stream and rejects malformed verdicts.
 
-These adapters do not establish real independence and do not choose a vendor.
+These adapters do not prove independence. The consumer selects the vendor.
 
 ## Image lane
 
 The image lane binds one provider attempt, deterministic transforms, measured checks and exact review views.
-The consumer supplies every threshold, every look and every transform parameter. Generate supplies the measurements and the generic checks.
+The consumer supplies every threshold, visual target and transform parameter. Generate supplies the measurements and the generic checks.
 Acceptance follows [the review contract of the brief](#generatebrief).
 
 | Task | Call |
@@ -635,15 +666,15 @@ Request bindings accept the kind `postprocess` with the existing `Postprocess.Tr
 - string parameters
 - a positive whole attempt number
 
-The binding keeps those identities and the optional rights. It does not interpret the projection of the consumer or any other transform algorithm.
-Undeclared bindings and mutating stages refuse before host execution.
-Recipe decoders accept `unknown`. Raw binding values remain `unknown` until the binding checks.
+The binding keeps those identities and optional rights. The consumer owns the transform algorithm.
+The adapter refuses undeclared bindings and mutating stages before host execution.
+Recipe decoders accept `unknown`. Binding values remain `unknown` until the adapter checks them.
 Before binding, the adapter checks nested provider requests, review requests and register targets against their declared field shapes. Adapters keep their semantic checks.
-Successful transform results expose bytes and typed facts only after `ok` narrows to `true`.
+Read transform bytes and typed facts only after a check that `ok` is `true`.
 
 ### Thresholds
 
-`Image.qa` has no built-in pass line and no built-in look. The consumer declares every threshold in `QaConfig.thresholds`.
+`Image.qa` supplies no default pass limit or visual target. The consumer declares every threshold in `QaConfig.thresholds`.
 A missing or non-numeric threshold raises an error that names the field.
 The table lists each threshold and the check or measurement that reads it.
 
@@ -714,7 +745,12 @@ The `declaration` of an artifact selects the checks.
 | `layout` | `singleSubject` | `panelCount` exceeds `maxPanels`. |
 
 A warning never refuses. The three warnings read `vignetteRatio`, `lightingGradient` and `lumaSpread`.
-`Image.qa.gate` also refuses a run that delivers a different number of files than it declares, a declared file that is missing, a paired group that does not hold exactly two images, and a pair whose mean-luminance ratio or registration correlation lies outside its thresholds.
+`Image.qa.gate` also refuses these conditions:
+
+- The delivered file count differs from the declared count.
+- A declared file is missing.
+- A paired group does not contain exactly two images.
+- A pair has a mean-luminance ratio or registration correlation outside its thresholds.
 
 ### Pixel helpers
 
@@ -733,15 +769,15 @@ A warning never refuses. The three warnings read `vignetteRatio`, `lightingGradi
 
 ### Transforms and review
 
-Transforms change pixels deterministically. Review stages blind evidence for one reviewer.
+Transforms change pixels deterministically. Review prepares blind evidence for one reviewer.
 
 - `Image.matte.run(codec, bytes, parameters)` repairs a cutout with the declared `interiorDistance`, `boundaryDistance` and `featherRadius`. It refuses a source without an opacity channel. The consumer declares the parameters. A host that binds `matte` needs `matteParameters`.
-- `Image.register.run(config, bytes, target)` pulls colour towards the declared target `hue`, `saturationCeiling` and percentile `values`. The facts count pixels above alpha 5.
+- `Image.register.run(config, bytes, target)` changes colour towards the declared target `hue`, `saturationCeiling` and percentile `values`. The facts count pixels above alpha 5.
 - `Image.deliver.run(config, bytes, declaredWidth, declaredHeight)` resamples to the declared size with a Lanczos filter of window 3.
 - Each transform records the digests and the facts before and after. It is deterministic.
-- A provider `Request` names its output `group`. The `group` is a lower kebab-case collection name. It becomes a directory under the output root and the first part of the candidate identity.
+- A provider `Request` names its output `group`. The `group` is a collection name in lower kebab-case. It becomes a directory under the output root and the first part of the candidate identity.
 - Consumer codecs implement container decoding and encoding.
-- `Image.review.stage` binds exact evidence views. It rejects leakage of the producer, the prompt and the previous verdict.
+- `Image.review.stage` binds exact evidence views. It rejects evidence that reveals the producer, prompt or previous verdict.
 - `Image.lane.summary` records the gates and the transform facts.
 
 Image checks and transforms do not supply a review decision.
@@ -754,5 +790,5 @@ The default ruleset names no host. `Consumer.RULESETS` lists the optional rulese
 
 ## Fixture host
 
-`Host.fake.create(options)` returns a `Generate.Host` for fixtures. The consumer scripts its stage outcomes, compensation faults, capabilities and environment.
+`Host.fake.create(options)` returns a `Generate.Host` for fixtures. The consumer supplies stage outcomes, compensation faults, capabilities and environment.
 It does no I/O.

@@ -102,7 +102,6 @@ local function compile(brief: AssetBrief, drafts: { StageDraft }): Plan
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
 	compile = compile,
 	fingerprint = fingerprint,
 }

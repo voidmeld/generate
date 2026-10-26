@@ -259,7 +259,6 @@ local function requirementFaults(
 end
 
 return {
-	SCHEMA_VERSION = SCHEMA_VERSION,
 	FACT_NAMES = FACT_NAMES,
 	derivation = derivation,
 	fingerprintOf = fingerprintOf,

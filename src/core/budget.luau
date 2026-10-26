@@ -123,6 +123,5 @@ end
 
 return {
 	measure = measure,
-	kindAllowed = kindAllowed,
 	evaluate = evaluate,
 }

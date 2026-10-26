@@ -162,9 +162,6 @@ local function run(codec: Codec.Codec, bytes: string, parameters: Parameters): R
 end
 
 return {
-	distance = distance,
-	nearest = nearest,
-	oneBit = oneBit,
 	apply = apply,
 	run = run,
 }

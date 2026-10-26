@@ -28,28 +28,19 @@ export type TransformedSummary = {
 export type Summary = TransformedSummary
 
 local function declarationOf(artifact: Request.Artifact, full: boolean): Qa.Declaration
-	if not full then
-		return {
-			id = artifact.id,
-			role = artifact.role,
-			tiles = artifact.tiles,
-			transparentBackground = artifact.transparentBackground,
-			singleSubject = artifact.singleSubject,
-		}
-	end
 	return {
 		id = artifact.id,
 		role = artifact.role,
 		tiles = artifact.tiles,
 		transparentBackground = artifact.transparentBackground,
 		singleSubject = artifact.singleSubject,
-		unlit = artifact.unlit,
-		hueBand = artifact.hueBand,
-		limitBrightMaxima = artifact.limitBrightMaxima,
-		declaredWidth = artifact.declaredWidth,
-		declaredHeight = artifact.declaredHeight,
-		dark = artifact.dark,
-		registerTarget = artifact.registerTarget,
+		unlit = if full then artifact.unlit else nil,
+		hueBand = if full then artifact.hueBand else nil,
+		limitBrightMaxima = if full then artifact.limitBrightMaxima else nil,
+		declaredWidth = if full then artifact.declaredWidth else nil,
+		declaredHeight = if full then artifact.declaredHeight else nil,
+		dark = if full then artifact.dark else nil,
+		registerTarget = if full then artifact.registerTarget else nil,
 	}
 end
 
@@ -161,6 +152,5 @@ end
 
 return {
 	delivered = delivered,
-	sourcesByOutput = sourcesByOutput,
 	summary = summary,
 }

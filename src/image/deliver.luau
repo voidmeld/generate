@@ -206,10 +206,5 @@ local function run(config: Config, bytes: string, declaredWidth: number, declare
 end
 
 return {
-	sinc = sinc,
-	lanczos = lanczos,
-	axisWeights = axisWeights,
-	resize = resize,
-	facts = facts,
 	run = run,
 }
