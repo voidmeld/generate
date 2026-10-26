@@ -5,7 +5,8 @@ This page names the source and brief lint checks, the command that runs each che
 ## Source
 
 Run `lute lint -c lint.config.luau` to check the repository source. Lute reports ordinary Luau defects.
-`tools/lint-rules/` contains the repository CST rules, including the ban on ambient `_G` and `shared` authority.
+The pinned Verify `checks` package supplies the CST rule banning ambient `_G` and `shared` authority.
+Repository checks use `tools/checks-config.luau` and Generate policy in `tools/checks-policy.luau`.
 
 The gate analyzes `src`, `tests`, `tools`, `bench`, `examples`, `lint.config.luau` and the dependency lock in `.luaurc` strict mode.
 Standalone fixtures and tests also declare `--!strict`.

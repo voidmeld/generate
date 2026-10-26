@@ -6,7 +6,7 @@ return {
 			ignores = { "build/**", ".lute/**", "vendor/**" },
 			globals = {},
 			rulepaths = {
-				"tools/lint-rules/global_table_usage.luau",
+				".lute/dependencies/verify/src/checks/lint-rules/global_table_usage.luau",
 			},
 			ruleconfigs = {
 				global_function_in_scope = { off = true },
