@@ -18,6 +18,7 @@ local config: {
 	publicSurface: Surface.Config,
 	cleanClone: Clone.Config,
 	noAny: Repository.Selection,
+	specStyle: Repository.Selection,
 } =
 	{
 		boundary = {
@@ -159,6 +160,7 @@ local config: {
 			requiredPaths = { ".lute/dependencies" },
 		},
 		noAny = { untracked = true },
+		specStyle = { untracked = true, exclude = { ["tests/adapters.lute.verify.luau"] = true } },
 	}
 
 local function writeRequested(): boolean
