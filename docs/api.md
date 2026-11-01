@@ -405,9 +405,6 @@ Acceptance follows [the review contract of the brief](#generatebrief).
 
 | Task | Call |
 | --- | --- |
-| Derive recipe data from a brief | `Image.request.fromBrief` |
-| Decode recipe data | `Image.request.decode` |
-| Bind recipe data to the stages of a plan | `Image.request.bindings` |
 | Encode a recipe document | `Image.request.encode` |
 | Route the declared stages to tools | `Image.host.create` |
 | Invoke the provider once | `Image.provider.runStage` |
@@ -425,33 +422,19 @@ Acceptance follows [the review contract of the brief](#generatebrief).
 | Resize to a declared size | `Image.deliver.run` |
 | Stage a blind review packet | `Image.review.stage` and `Image.review.runStage` |
 | Start from the default blindness configuration | `Image.review.DEFAULT_CONFIG` |
-| Summarize the gates and transform facts of a run | `Image.lane.summary` |
 | Copy, convert or encode pixels | [Pixel helpers](#pixel-helpers) |
 
-### Request and execution
+### Execution
 
-Request and execution bind recipe data to plan stages and run those stages.
+The consumer builds typed `HostBinding` values for the stages it declares in a Generate plan.
+`Image.host.create` routes those stages and refuses mutating stages; it has no publication authority.
+`Image.provider.runStage` spends one invocation and preserves references while confining output paths.
+`Image.postprocess.runStage` pins the script bytes and refuses an existing output, silent or nonzero execution and rewritten input.
+The consumer owns recipe loading, schema validation and transform algorithms.
 
-- `Image.request.fromBrief`, `decode`, `bindings` and `encode` bind recipe data to exactly declared, non-mutating plan stages.
-- `Image.host.create` routes those stages. It has no publication authority.
-- `Image.provider.runStage` spends one invocation that the consumer selects. It preserves references and confines output paths. It refuses a missing or mismatched reply.
-- `Image.postprocess.runStage` pins the script bytes. It refuses an existing output, a silent or nonzero execution and a rewritten input.
-
-Each recipe artifact declares `id`, `slug`, `role`, `tiles`, `transparentBackground` and `singleSubject`. It can also declare `unlit`, `dark`, `pairedGroup`, `hueBand`, `limitBrightMaxima`, `declaredWidth`, `declaredHeight` and `registerTarget`. The [checks](#checks) read these declarations.
-
-Request bindings accept the kind `postprocess` with the existing `Postprocess.Transform` fields:
-
-- the exact artifact ID and the supported transform kind
-- the pinned script path and digest
-- the input role and paths
-- the immutable output path
-- string parameters
-- a positive whole attempt number
-
-The binding keeps those identities and optional rights. The consumer owns the transform algorithm.
-The adapter refuses undeclared bindings and mutating stages before host execution.
-Recipe decoders accept `unknown`. Binding values remain `unknown` until the adapter checks them.
-Before binding, the adapter checks nested provider requests, review requests and register targets against their declared field shapes. Adapters keep their semantic checks.
+`Image.request.encode(config, document)` encodes consumer data with sorted object keys and a final newline.
+The config supplies `indent` and a scalar `serialize` function. Encoding grants no execution or acceptance.
+Use `QaDeclaration` for image checks and `HostBinding` for execution; there is no intermediate recipe representation.
 Read transform bytes and typed facts only after a check that `ok` is `true`.
 
 ### Thresholds
@@ -560,7 +543,6 @@ Transforms change pixels deterministically. Review prepares blind evidence for o
 - A provider `Request` names its output `group`. The `group` is a collection name in lower kebab-case. It becomes a directory under the output root and the first part of the candidate identity.
 - Consumer codecs implement container decoding and encoding.
 - `Image.review.stage` binds exact evidence views. It rejects evidence that reveals the producer, prompt or previous verdict.
-- `Image.lane.summary` records the gates and the transform facts.
 
 Image checks and transforms do not supply a review decision.
 Review identity strings alone do not prove that an independent human or agent reviewed the content.

@@ -1,101 +1,6 @@
 --!strict
 
-local Generate = require "../src/core"
 local Image = require "../src/image"
-
-local SCHEMA = "example.image-run.v2"
-
-local brief = Generate.brief {
-	id = "example.wall-surface.v1",
-	kind = "image",
-	intent = { role = "One tiling wall surface", style = "plain", description = "one example surface" },
-	constraints = { opacity = "opaque" },
-	review = {
-		rubric = "example-surface",
-		rubricFingerprint = "example-surface-rubric-v1",
-		views = { "artifact" },
-		blindness = "required",
-		independence = "required",
-	},
-	provenance = { requireParentLineage = false, requiredRightsFacts = { "source" } },
-	delivery = { semanticId = "example.wall.surface", target = "image" },
-}
-
-local plan = Generate.plan(brief, {
-	{ id = "candidate", operation = "generate", requires = { "reference-image" } },
-	{ id = "review", operation = "review", dependsOn = { "candidate" } },
-})
-
-local imageRun = {
-	artifacts = {
-		{
-			id = "example.wall.surface.original.v1",
-			slug = "wall-surface",
-			role = "terrain-material",
-			tiles = true,
-			transparentBackground = false,
-			singleSubject = true,
-		},
-	},
-	bindings = {
-		candidate = {
-			kind = "provider",
-			attempt = 1,
-			delivery = true,
-			request = {
-				group = "example",
-				slug = "wall-surface",
-				subject = "wall",
-				family = "surface",
-				variant = "original",
-				version = "v1",
-				sourceDirectory = "art",
-				prompt = "one tiling wall surface",
-			},
-		},
-		review = {
-			kind = "review",
-			request = {
-				packetId = "example.wall-surface.v1/review",
-				candidateId = "example.wall.surface",
-				revision = 1,
-				producer = "example-author",
-				candidateArtifactId = "example.wall.surface.original.v1",
-				evidence = { { artifactId = "example.wall.surface.original.v1", view = "artifact", role = "capture" } },
-				rubric = { id = "example-surface", fingerprint = "example-surface-rubric-v1" },
-				requestedViews = { "artifact" },
-				captureEnvironment = { host = "example-image" },
-			},
-		},
-	},
-}
-
-local config: Image.RequestConfig = {
-	schema = SCHEMA,
-	indent = "  ",
-	serialize = function(value: unknown): string
-		if type(value) == "string" then
-			return '"' .. value .. '"'
-		end
-		return tostring(value)
-	end,
-}
-
-local derived = Image.request.fromBrief(config, { brief = brief, imageRun = imageRun }, "example.generate.luau")
-assert(derived.ok, "the example recipe declares one image run")
-local document = derived.document
-
-local bound = Image.request.bindings(document, plan)
-assert(bound.ok, "every declared plan stage carries one binding")
-
-local unbound = Image.request.bindings({
-	schema = document.schema,
-	briefId = document.briefId,
-	artifacts = document.artifacts,
-	matte = false,
-	bindings = { candidate = document.bindings.candidate },
-}, plan)
-assert(not unbound.ok, "a plan stage with no binding holds the whole request")
 
 local thresholds: Image.QaThresholds = {
 	opaqueAlpha = 250,
@@ -135,7 +40,7 @@ local codec: Image.Codec = {
 		return ""
 	end,
 }
-local qa: Image.QaConfig = { schema = SCHEMA, codec = codec, thresholds = thresholds }
+local qa: Image.QaConfig = { schema = "example.image-qa.v1", codec = codec, thresholds = thresholds }
 local undecoded = Image.qa.assess(qa, "", {
 	id = "example.wall.surface.original.v1",
 	role = "wall-surface",
@@ -190,4 +95,4 @@ local unblinded = Image.review.stage(Image.review.DEFAULT_CONFIG, {
 }, { artifact })
 assert(not unblinded.ok, "a capture environment naming the producer unblinds the reviewer")
 
-print("image-lane example: bound " .. tostring(#document.artifacts) .. " artifact(s) for " .. document.briefId)
+print "image tools example: measured one artifact and staged its blind review"

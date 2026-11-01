@@ -9,7 +9,7 @@ Consumers own art direction, budgets, credentials, destinations, rights policy a
 | `src/core` | Briefs, plans, intersection of capability and authority, provenance, review, manifests, delivery destinations and execution recovery records. |
 | `src/roblox` | Roblox adapter, one module per job: reviewed file and native-object delivery, destinations, size units, asset readback, permission requests, asset audit, binary instance reading. |
 | `src/media` | Audio measurement without a process. |
-| `src/image` | Recipe binding, one provider attempt, deterministic transforms, measurements and checks against consumer thresholds, and blind review packets. |
+| `src/image` | Typed host bindings, one provider attempt, deterministic transforms, measurements and checks against consumer thresholds, and blind review packets. |
 | `src/lute` | Process and media tool bindings. |
 | `src/host`, `src/consumer` | Fixture hosts and authored-brief diagnostics. |
 

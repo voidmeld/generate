@@ -1,10 +1,9 @@
 --!strict
 
-local json = require "@std/json"
+local Lute = require "../.lute/dependencies/verify/src/lute"
 local crypto = require "@lute/crypto"
 
 local Fixture = require "./fixtures/image-codec"
-local Thresholds = require "./fixtures/image-thresholds"
 local Generate = require "../src/core"
 local Image = require "../src/image"
 local Test = require "./harness"
@@ -17,20 +16,23 @@ local Provider = require "../src/image/provider"
 local Request = require "../src/image/request"
 local Review = require "../src/image/review"
 local Host = Image.host
-local Lane = require "../src/image/lane"
-
-local MATTE_PARAMETERS: Image.MatteParameters = { interiorDistance = 3, boundaryDistance = 2, featherRadius = 1.5 }
 
 local BOUNDS: Image.MeasureBounds = { minShortSide = 896, maxLongSide = 2048 }
 local MEASURE: Image.MeasureConfig = { digest = Fixture.digest, bounds = BOUNDS }
 
 local REQUEST_CONFIG: Image.RequestConfig = {
-	schema = "spec.image-run.v2",
 	indent = "  ",
 	serialize = function(value: unknown): string
-		return json.serialize(value :: json.Value)
+		return Lute.encode(value)
 	end,
 }
+
+describe("Image.request", function()
+	it("encodes consumer documents with sorted keys, nested arrays and a final newline", function()
+		expect(Request.encode(REQUEST_CONFIG, { b = 1, a = { "x", "y" } })):toBe '{\n  "a": [\n    "x",\n    "y"\n  ],\n  "b": 1\n}\n'
+		expect(Request.encode(REQUEST_CONFIG, {})):toBe "{}\n"
+	end)
+end)
 
 local OUTPUT_ROOT = "art/reference"
 local SOURCE_ROOT = "art/source"
@@ -83,7 +85,7 @@ local PROVIDER: Image.ProviderConfig = {
 	provider = "spec-provider",
 	model = "spec-model",
 	capability = "reference-image",
-	disposition = "active" :: Generate.CandidateDisposition,
+	disposition = "active",
 	rightsSource = "owned_generated",
 	parentOrigin = "repository:",
 	outputRoot = OUTPUT_ROOT,
@@ -109,401 +111,52 @@ local PROVIDER_REQUEST: Image.ProviderRequest = {
 	prompt = "  A grounded stylized wayside vigil lamp, three-quarter view.  ",
 }
 
-local function altered(overrides: unknown): Image.ProviderRequest
+local function altered(
+	overrides: { group: string?, sourceDirectory: string?, operationId: string?, editOf: string? }
+): Image.ProviderRequest
 	local request = table.clone(PROVIDER_REQUEST)
-	local fields = request :: Image.ProviderRequest & { [string]: unknown }
-	for key, value in overrides :: { [string]: unknown } do
-		fields[key] = value
-	end
-	return request :: Image.ProviderRequest
+	request.group = overrides.group or request.group
+	request.sourceDirectory = overrides.sourceDirectory or request.sourceDirectory
+	request.operationId = overrides.operationId or request.operationId
+	request.editOf = overrides.editOf or request.editOf
+	return request
 end
 
 local function brief(): Generate.Brief
 	return Generate.brief {
 		schemaVersion = 1,
 		id = "spec.surface.v1",
-		kind = "image" :: Generate.AssetKind,
+		kind = "image",
 		intent = { role = "a spec surface", style = "plain", description = "one spec subject" },
 		constraints = { opacity = "opaque" },
 		review = {
 			rubric = "docs/review.md",
 			rubricFingerprint = string.rep("d6ee7295", 8),
 			views = { "artifact" },
-			blindness = "required" :: Generate.ReviewRequirement,
-			independence = "required" :: Generate.ReviewRequirement,
+			blindness = "required",
+			independence = "required",
 		},
-		provenance = { requireParentLineage = false, requiredRightsFacts = { "source" } :: { Generate.RightsFactName } },
+		provenance = { requireParentLineage = false, requiredRightsFacts = { "source" } },
 		delivery = { semanticId = "spec.surface", target = "image" },
 	}
 end
 
 local BRIEF = brief()
 
-local PLAN = Generate.plan(BRIEF, {
-	{ id = "candidate", operation = "generate", requires = { "reference-image" } },
-	{ id = "review", operation = "review", dependsOn = { "candidate" } },
-})
-
-local function document(): Image.RequestDocument
-	return {
-		schema = REQUEST_CONFIG.schema,
-		briefId = BRIEF.id,
-		artifacts = {
-			{
-				id = "spec.surface.original.v1",
-				slug = "spec-surface",
-				role = "spec-surface",
-				tiles = true,
-				transparentBackground = false,
-				singleSubject = true,
-			},
-		},
-		matte = false,
-		bindings = {
-			candidate = {
-				kind = "provider",
-				attempt = 1,
-				delivery = true,
-				request = {
-					group = "fixture",
-					slug = "spec-surface",
-					prompt = "draw one spec surface",
-					subject = "surface",
-					family = "surface",
-					variant = "single_plane",
-					version = "v1",
-					sourceDirectory = SOURCE_ROOT .. "/fixture-props",
-				},
-			},
-			review = {
-				kind = "review",
-				request = {
-					packetId = "spec.surface.v1/review",
-					candidateId = "spec.surface.v1",
-					revision = 1,
-					producer = "spec",
-					candidateArtifactId = "spec.surface.original.v1",
-					evidence = {},
-					rubric = { id = "spec", fingerprint = "spec" },
-					requestedViews = {},
-					captureEnvironment = {},
-				},
-			},
-		},
-	}
-end
-
-local function requestRefusal(
-	value: Image.RequestDecoded | Image.RequestBound | Image.RequestRefusal
-): Image.RequestRefusal
-	assert(not value.ok)
-	return value
-end
-
 local function stageDetail(value: Generate.StageOutcome): string
 	assert(value.status ~= "returned")
 	return value.detail
 end
 
-local function bindingFields(value: unknown): { [string]: unknown }
-	assert(type(value) == "table")
-	return value :: { [string]: unknown }
+local function width(facts: unknown): unknown
+	assert(type(facts) == "table")
+	for key, value in facts do
+		if key == "width" then
+			return value
+		end
+	end
+	error "missing width fact"
 end
-
-local function withBindings(mutate: (bindings: { [string]: unknown }) -> ()): Image.RequestDocument
-	local built = document()
-	mutate(built.bindings)
-	return built
-end
-
-describe("Image.request", function()
-	it("derives one document from the brief that owns the prompt", function()
-		local source = document()
-		local derived = Request.fromBrief(
-			REQUEST_CONFIG,
-			{ brief = BRIEF, imageRun = { artifacts = source.artifacts, bindings = source.bindings } },
-			"spec.generate.luau"
-		)
-		expect(derived.ok):toBe(true)
-		assert(derived.ok == true)
-		expect(derived.document.schema):toBe(REQUEST_CONFIG.schema)
-		expect(derived.document.briefId):toBe(BRIEF.id)
-		expect(#derived.document.artifacts):toBe(1)
-
-		local undeclared =
-			Request.fromBrief(REQUEST_CONFIG, { brief = BRIEF, imageRun = { bindings = source.bindings } }, "spec")
-		expect(undeclared.ok):toBe(false)
-		assert(undeclared.ok == false)
-		expect(undeclared.reason):toBe "artifacts"
-	end)
-
-	it("refuses a brief that declares no image run rather than inventing an empty one", function()
-		expect(requestRefusal(Request.fromBrief(REQUEST_CONFIG, {}, "spec")).reason):toBe "image-run"
-		expect(
-			requestRefusal(Request.fromBrief(REQUEST_CONFIG, { brief = BRIEF, imageRun = { bindings = {} } }, "spec")).reason
-		):toBe "image-run"
-		expect(
-			requestRefusal(Request.fromBrief(REQUEST_CONFIG, { imageRun = { bindings = document().bindings } }, "spec")).reason
-		):toBe "brief"
-	end)
-
-	it("refuses a document carrying another schema or naming no brief", function()
-		local decoded =
-			Request.decode(REQUEST_CONFIG, { schema = "spec.image-run.v0", briefId = BRIEF.id, bindings = {} }, "spec")
-		expect(decoded.ok):toBe(false)
-		assert(decoded.ok == false)
-		expect(decoded.reason):toBe "request"
-		local unnamed = Request.decode(REQUEST_CONFIG, { schema = REQUEST_CONFIG.schema, bindings = {} }, "spec")
-		expect(unnamed.ok):toBe(false)
-		assert(unnamed.ok == false)
-		expect(unnamed.reason):toBe "request"
-	end)
-
-	it("preserves the decoded document and extension fields", function()
-		local value = document()
-		local extension = value :: Image.RequestDocument & { marker: string? }
-		extension.marker = "consumer extension"
-		local decoded = Request.decode(REQUEST_CONFIG, value, "spec")
-		assert(decoded.ok)
-		expect(decoded.document == value):toBe(true)
-		expect(extension.marker):toBe "consumer extension"
-	end)
-
-	it("refuses malformed nested provider and review request fields", function()
-		local cases: { { stage: string, field: string, value: unknown } } = {
-			{ stage = "candidate", field = "subject", value = 12 },
-			{ stage = "candidate", field = "operationId", value = false },
-			{ stage = "candidate", field = "declaredWidth", value = "wide" },
-			{ stage = "candidate", field = "referenceImages", value = { 12 } },
-			{ stage = "candidate", field = "rights", value = { source = { state = "invented" } } },
-			{ stage = "candidate", field = "rights", value = { notes = { false } } },
-			{ stage = "review", field = "revision", value = "first" },
-			{ stage = "review", field = "rubric", value = { id = "spec" } },
-			{ stage = "review", field = "evidence", value = { { artifactId = "spec", view = "front", role = false } } },
-			{ stage = "review", field = "requestedViews", value = { 12 } },
-			{ stage = "review", field = "captureEnvironment", value = { adapter = false } },
-		}
-		for _, case in cases do
-			local value = document()
-			local binding = bindingFields(value.bindings[case.stage])
-			bindingFields(binding.request)[case.field] = case.value
-			local outcome = Request.bindings(value, PLAN)
-			expect(requestRefusal(outcome).reason):toBe "bindings"
-		end
-	end)
-
-	it("validates register target bands in artifacts and stage bindings", function()
-		local target = {
-			hue = 220,
-			saturationCeiling = 0.3,
-			value = {
-				p5 = { min = 0, max = 50, target = 25 },
-				p50 = { min = 50, max = 150, target = 100 },
-				p95 = { min = 150, max = 255, target = 200 },
-			},
-		}
-		local value = document()
-		value.artifacts[1].registerTarget = target
-		local plan = Generate.plan(BRIEF, {
-			{ id = "candidate", operation = "generate" },
-			{ id = "register", operation = "generate", dependsOn = { "candidate" } },
-			{ id = "review", operation = "review", dependsOn = { "register" } },
-		})
-		value.bindings.register = {
-			kind = "register",
-			sourceId = "source",
-			outputId = "output",
-			outputPath = "output.png",
-			target = target,
-		}
-		expect(Request.bindings(value, plan).ok):toBe(true)
-		for _, invalid in
-			{
-				{},
-				{ hue = 220, saturationCeiling = 0.3 },
-				{ hue = 220, saturationCeiling = 0.3, value = { p5 = {}, p50 = {}, p95 = {} } },
-			}
-		do
-			bindingFields(value.bindings.register).target = invalid
-			expect(Request.bindings(value, plan).ok):toBe(false)
-			expect(Request.artifactsRefusal({
-				{
-					id = "spec",
-					slug = "spec",
-					role = "spec",
-					tiles = true,
-					transparentBackground = false,
-					singleSubject = true,
-					registerTarget = invalid,
-				},
-			}, "spec") ~= nil):toBe(true)
-		end
-	end)
-
-	it("refuses a document written for another brief even when the stage names line up", function()
-		local crossed = document()
-		crossed.briefId = "spec.other.v1"
-		local bound = Request.bindings(crossed, PLAN)
-		expect(bound.ok):toBe(false)
-		assert(bound.ok == false)
-		expect(bound.detail):toContain "was written for brief"
-	end)
-
-	it("binds a provider and a review stage the plan actually declares", function()
-		local bound = Request.bindings(document(), PLAN)
-		expect(bound.ok):toBe(true)
-		assert(bound.ok == true)
-		local bindings = bound.bindings
-		assert(bindings.candidate.kind == "provider")
-		expect(bindings.candidate.kind):toBe "provider"
-		expect(bindings.candidate.attempt):toBe(1)
-		expect(bindings.candidate.delivery):toBe(true)
-		expect(bindings.review.kind):toBe "review"
-	end)
-
-	it("admits the declared matte stage and refuses every other postprocess in its place", function()
-		local mattePlan = Generate.plan(BRIEF, {
-			{ id = "candidate", operation = "generate", requires = { "reference-image" } },
-			{
-				id = "matte",
-				operation = "generate",
-				dependsOn = { "candidate" },
-				requires = { "deterministic-image-matte" },
-			},
-			{ id = "review", operation = "review", dependsOn = { "matte" } },
-		})
-		local matted = document()
-		matted.matte = true
-		matted.bindings.matte = {
-			kind = "matte",
-			sourceId = "spec.surface.original.v1",
-			outputId = "spec.surface.matte.v1",
-			outputPath = OUTPUT_ROOT .. "/fixture/spec-surface-matte.png",
-		}
-		expect(Request.bindings(matted, mattePlan).ok):toBe(true)
-		bindingFields(matted.bindings.matte).kind = "postprocess"
-		expect(Request.bindings(matted, mattePlan).ok):toBe(false)
-	end)
-
-	it("admits a declared deliver stage and refuses a non-whole or missing declared size", function()
-		local deliverPlan = Generate.plan(BRIEF, {
-			{ id = "candidate", operation = "generate", requires = { "reference-image" } },
-			{
-				id = "deliver",
-				operation = "generate",
-				dependsOn = { "candidate" },
-				requires = { "deterministic-image-deliver" },
-			},
-			{ id = "review", operation = "review", dependsOn = { "deliver" } },
-		})
-		local delivered = document()
-		delivered.bindings.deliver = {
-			kind = "deliver",
-			sourceId = "spec.surface.original.v1",
-			outputId = "spec.surface.deliver.v1",
-			outputPath = OUTPUT_ROOT .. "/fixture/spec-surface-deliver.png",
-			declaredWidth = 1024,
-			declaredHeight = 1024,
-		}
-		local bound = Request.bindings(delivered, deliverPlan)
-		expect(bound.ok):toBe(true)
-		assert(bound.ok == true)
-		assert(bound.bindings.deliver.kind == "deliver")
-		expect(bound.bindings.deliver.declaredWidth):toBe(1024)
-
-		local fractional = document()
-		fractional.bindings.deliver = table.clone(bindingFields(delivered.bindings.deliver))
-		bindingFields(fractional.bindings.deliver).declaredWidth = 1024.5
-		expect(Request.bindings(fractional, deliverPlan).ok):toBe(false)
-
-		local missing = document()
-		missing.bindings.deliver = table.clone(bindingFields(delivered.bindings.deliver))
-		bindingFields(missing.bindings.deliver).declaredHeight = nil
-		expect(Request.bindings(missing, deliverPlan).ok):toBe(false)
-
-		local misnamedPlan = Generate.plan(BRIEF, {
-			{ id = "candidate", operation = "generate", requires = { "reference-image" } },
-			{
-				id = "resize",
-				operation = "generate",
-				dependsOn = { "candidate" },
-				requires = { "deterministic-image-deliver" },
-			},
-			{ id = "review", operation = "review", dependsOn = { "resize" } },
-		})
-		local misnamed = document()
-		misnamed.bindings.resize = table.clone(bindingFields(delivered.bindings.deliver))
-		expect(Request.bindings(misnamed, misnamedPlan).ok):toBe(false)
-	end)
-
-	it("refuses a binding whose stage the plan never declared and a plan stage left unbound", function()
-		local extra = Request.bindings(
-			withBindings(function(bindings)
-				bindings.postprocess = { kind = "review", request = {} }
-			end),
-			PLAN
-		)
-		expect(extra.ok):toBe(false)
-		assert(extra.ok == false)
-		expect(extra.reason):toBe "bindings"
-
-		local unbound = Request.bindings(
-			withBindings(function(bindings)
-				bindings.review = nil
-			end),
-			PLAN
-		)
-		expect(unbound.ok):toBe(false)
-		assert(unbound.ok == false)
-		expect(unbound.detail):toContain "no binding"
-	end)
-
-	it("refuses an unsupported binding kind and a provider attempt that is not a whole ordinal", function()
-		expect(Request.bindings(
-			withBindings(function(bindings)
-				bindings.candidate = { kind = "publish", request = {} }
-			end),
-			PLAN
-		).ok):toBe(false)
-		expect(Request.bindings(
-			withBindings(function(bindings)
-				bindingFields(bindings.candidate).attempt = 1.5
-			end),
-			PLAN
-		).ok):toBe(false)
-	end)
-
-	it("refuses a declaration with no artifacts, a missing field, or a duplicate id", function()
-		expect(Request.artifactsRefusal(nil, "spec") ~= nil):toBe(true)
-		expect(Request.artifactsRefusal({}, "spec") ~= nil):toBe(true)
-		local complete = document().artifacts[1]
-		for _, field in { "id", "slug", "role", "tiles", "transparentBackground", "singleSubject" } do
-			local partial: { [string]: unknown } = {}
-			local original: unknown = complete
-			assert(type(original) == "table")
-			for key, value in original do
-				assert(type(key) == "string")
-				partial[key] = value
-			end
-			partial[field] = nil
-			expect(Request.artifactsRefusal({ partial }, "spec") ~= nil):toBe(true)
-		end
-		local twice = Request.artifactsRefusal({ complete, table.clone(complete) }, "spec")
-		expect(assert(twice).detail):toContain "declared twice"
-		expect(Request.artifactsRefusal({ complete }, "spec")):toBe(nil)
-	end)
-
-	it("encodes every object key in sorted order so a request file stays diff-stable", function()
-		local encoded = Request.encode(REQUEST_CONFIG, document())
-		expect(string.sub(encoded, -1)):toBe "\n"
-		expect(Request.encode(REQUEST_CONFIG, document())):toBe(encoded)
-		local schemaAt = string.find(encoded, '"schema"', 1, true)
-		local bindingsAt = string.find(encoded, '"bindings"', 1, true)
-		expect(bindingsAt ~= nil and schemaAt ~= nil and bindingsAt < schemaAt):toBe(true)
-		expect(Request.encodeValue(REQUEST_CONFIG, { b = 1, a = 2 }, "")):toBe '{\n  "a": 2,\n  "b": 1\n}'
-		expect(Request.encodeValue(REQUEST_CONFIG, { "x", "y" }, "")):toBe '[\n  "x",\n  "y"\n]'
-	end)
-end)
 
 describe("Image.measure", function()
 	local RAW = OUTPUT_ROOT .. "/fixture/raw-atlas.png"
@@ -610,7 +263,13 @@ describe("Image.review", function()
 	local SILHOUETTE = artifact("silhouette", string.rep("91cc37de", 8))
 	local ARTIFACTS = { CANDIDATE, RAW, SILHOUETTE }
 
-	local function staging(overrides: unknown): Image.ReviewRequest
+	local function staging(overrides: {
+		candidateArtifactId: string?,
+		evidence: { { artifactId: string, view: string, role: string } }?,
+		rubric: Generate.RubricIdentity?,
+		requestedViews: { string }?,
+		captureEnvironment: { [string]: string }?,
+	}): Image.ReviewRequest
 		local built: Image.ReviewRequest = {
 			packetId = "spec.surface.v1/packet",
 			candidateId = "spec.surface.reference",
@@ -625,10 +284,12 @@ describe("Image.review", function()
 			requestedViews = { "raw-atlas", "silhouette" },
 			captureEnvironment = { host = "spec-image", runtime = "lute" },
 		}
-		for key, value in overrides :: { [string]: unknown } do
-			(built :: typeof(built) & { [string]: unknown })[key] = value
-		end
-		return built :: Image.ReviewRequest
+		built.candidateArtifactId = overrides.candidateArtifactId or built.candidateArtifactId
+		built.evidence = overrides.evidence or built.evidence
+		built.rubric = overrides.rubric or built.rubric
+		built.requestedViews = overrides.requestedViews or built.requestedViews
+		built.captureEnvironment = overrides.captureEnvironment or built.captureEnvironment
+		return built
 	end
 
 	it("stages a packet binding the exact candidate revision and its evidence", function()
@@ -702,7 +363,7 @@ describe("Image.provider", function()
 		overrides: { files: { [string]: string }?, stdout: string?, exitcode: number?, saved: string? }
 	): (Image.ProviderDeps, { written: { Recorded }, invocations: { { string } } })
 		local files: { [string]: string } = overrides.files or {}
-		local log = { written = {} :: { Recorded }, invocations = {} :: { { string } } }
+		local log: { written: { Recorded }, invocations: { { string } } } = { written = {}, invocations = {} }
 		local deps: Image.ProviderDeps = {
 			exists = function(path: string): boolean
 				return files[path] ~= nil
@@ -899,7 +560,9 @@ describe("Image.postprocess", function()
 		}
 	end
 
-	local function transform(overrides: unknown): Image.PostprocessTransform
+	local function transform(
+		overrides: { scriptDigest: string?, inputs: { Postprocess.Input }? }
+	): Image.PostprocessTransform
 		local built: Image.PostprocessTransform = {
 			id = "deterministic-edit",
 			kind = "despeckle",
@@ -910,10 +573,9 @@ describe("Image.postprocess", function()
 			parameters = { seed = "0", sigma = "3" },
 			attempt = 6,
 		}
-		for key, value in overrides :: { [string]: unknown } do
-			(built :: typeof(built) & { [string]: unknown })[key] = value
-		end
-		return built :: Image.PostprocessTransform
+		built.scriptDigest = overrides.scriptDigest or built.scriptDigest
+		built.inputs = overrides.inputs or built.inputs
+		return built
 	end
 
 	local function harness(
@@ -921,7 +583,7 @@ describe("Image.postprocess", function()
 	): (Image.ProviderDeps, { commands: { { string } } })
 		local files: { [string]: string } = overrides.files
 			or { [SCRIPT] = SCRIPT_BYTES, [BASE] = png(1254, 1254, "base"), [DONOR] = png(1254, 1254, "donor") }
-		local log = { commands = {} :: { { string } } }
+		local log: { commands: { { string } } } = { commands = {} }
 		return {
 			exists = function(path: string): boolean
 				return files[path] ~= nil
@@ -933,8 +595,9 @@ describe("Image.postprocess", function()
 			createDirectory = function() end,
 			run = function(args: { string }): Image.ProviderRunResult
 				table.insert(log.commands, args)
-				if (overrides.exitcode or 0) ~= 0 then
-					return { stdout = "", stderr = "", exitcode = overrides.exitcode :: number }
+				local exitcode = overrides.exitcode or 0
+				if exitcode ~= 0 then
+					return { stdout = "", stderr = "", exitcode = exitcode }
 				end
 				local written: { [string]: string } = overrides.writes or { [EDITED] = png(1254, 1254, "despeckled") }
 				for path, bytes in written do
@@ -954,74 +617,15 @@ describe("Image.postprocess", function()
 		expect(argv[4]):toBe "--sigma=3"
 	end)
 
-	local function boundTransform(entry: unknown, mutation: boolean?): Image.RequestBound | Image.RequestRefusal
-		local value = document()
-		value.bindings = { projection = entry }
-		return Request.bindings(
-			value,
-			(
-					{
-						briefId = value.briefId,
-						stages = { { id = "projection", mutation = mutation == true } },
-					} :: unknown
-				) :: Generate.Plan
-		)
-	end
-
-	it("binds each supported postprocess kind without changing artifact, input, output or rights identity", function()
-		for _, kind in { "composite", "despeckle", "region-pass" } do
-			local value =
-				transform { kind = kind, rights = { source = { state = "known", value = "fixture-original" } } }
-			local bound = boundTransform { kind = "postprocess", transform = value, delivery = true }
-			expect(bound.ok):toBe(true)
-			assert(bound.ok == true)
-			assert(bound.bindings.projection.kind == "postprocess")
-			expect(bound.bindings.projection.kind):toBe "postprocess"
-			expect(bound.bindings.projection.transform):toBe(value)
-			expect(bound.bindings.projection.transform.id):toBe "deterministic-edit"
-			expect(bound.bindings.projection.transform.inputs[1].path):toBe(BASE)
-			expect(bound.bindings.projection.transform.outputPath):toBe(EDITED)
-			expect(bound.bindings.projection.delivery):toBe(true)
-		end
-	end)
-
-	it("refuses malformed, unsupported, undeclared and mutating postprocess requests before execution", function()
-		for _, field in { "id", "kind", "scriptPath", "scriptDigest", "inputs", "outputPath", "parameters", "attempt" } do
-			local value = bindingFields(transform {})
-			value[field] = nil
-			expect(boundTransform({ kind = "postprocess", transform = value }).ok):toBe(false)
-		end
-		local invalid: { unknown } = {
-			{ kind = "unknown" },
-			{ attempt = 0 },
-			{ attempt = 1.5 },
-			{ inputs = {} },
-			{ inputs = { { role = "", path = BASE } } },
-			{ parameters = { seed = 0 } },
-		}
-		for _, changed in invalid do
-			expect(boundTransform({ kind = "postprocess", transform = transform(changed) }).ok):toBe(false)
-		end
-		expect(boundTransform({ kind = "unknown", transform = transform {} }).ok):toBe(false)
-		expect(boundTransform({ kind = "postprocess" }).ok):toBe(false)
-		expect(boundTransform({ kind = "postprocess", transform = transform {} }, true).ok):toBe(false)
-		local extra = document()
-		extra.bindings = { absent = { kind = "postprocess", transform = transform {} } }
-		expect(Request.bindings(extra, PLAN).ok):toBe(false)
-	end)
-
-	it("executes the public request-to-host postprocess consumer and refuses script drift before spending", function()
+	it("executes the public host postprocess consumer and refuses script drift before spending", function()
 		for _, drifted in { false, true } do
 			local value = transform(if drifted then { scriptDigest = "changed" } else {})
-			local bound = boundTransform { kind = "postprocess", transform = value, delivery = true }
-			expect(bound.ok):toBe(true)
-			assert(bound.ok == true)
 			local deps, log = harness {}
 			local tool = { tool = "fixture", toolVersion = "v1", adapter = "fixture" }
 			local host = Host.create {
 				name = "postprocess-request-fixture",
 				deps = deps,
-				bindings = bound.bindings,
+				bindings = { projection = { kind = "postprocess", transform = value, delivery = true } },
 				codec = Fixture.codec,
 				digest = Fixture.digest,
 				measure = MEASURE,
@@ -1031,7 +635,7 @@ describe("Image.postprocess", function()
 				tools = { matte = tool, register = tool, deliver = tool },
 			}
 			local outcome = host.runStage(
-				({ id = "projection", mutation = false } :: unknown) :: Generate.Stage,
+				Generate.plan(BRIEF, { { id = "projection", operation = "transform" } }).stages[1],
 				BRIEF,
 				artifacts(),
 				{ capabilities = {}, destinations = {}, mutationBudget = 0 },
@@ -1332,8 +936,8 @@ describe("Image.host", function()
 		assert(outcome.status == "returned")
 		local complete = outcome
 		expect(assert(complete.output.metadata).resampled):toBe(true)
-		expect((assert(complete.output.metadata).preFacts :: Image.DeliverFacts).width):toBe(1254)
-		expect((assert(complete.output.metadata).postFacts :: Image.DeliverFacts).width):toBe(1024)
+		expect(width(assert(complete.output.metadata).preFacts)):toBe(1254)
+		expect(width(assert(complete.output.metadata).postFacts)):toBe(1024)
 		expect(assert(complete.output.invocations)[1].deterministic):toBe(true)
 		expect(assert(complete.output.invocations)[1].tool):toBe(TOOLS.deliver.tool)
 		local decoded = Fixture.codec.decode(files[outputPath])
@@ -1362,114 +966,6 @@ describe("Image.host", function()
 		local host = Host.create(options(world {}, {}))
 		expect(host.compensate):toBeNil()
 		expect(host.name):toBe "spec-image"
-	end)
-end)
-
-describe("Image.lane", function()
-	local QA: Image.QaConfig = { schema = "spec.image-qa.v1", codec = Fixture.codec, thresholds = Thresholds }
-	local CONFIG: Image.LaneConfig = { qa = QA, matteParameters = MATTE_PARAMETERS }
-
-	local function card(opacity: (x: number, y: number) -> number): string
-		return Fixture.codec.encodeRgba(16, 16, function(x: number, y: number): Image.Rgba
-			return { r = 100, g = 100, b = 100, a = opacity(x, y) }
-		end)
-	end
-
-	local function feathered(x: number, y: number): number
-		local dx, dy = x - 7.5, y - 7.5
-		return math.clamp(math.floor((5.5 - math.sqrt(dx * dx + dy * dy)) * 170), 0, 255)
-	end
-
-	local PRE = "pre.png"
-	local POST = "post.png"
-	local files: { [string]: string } = { [PRE] = card(function()
-		return 255
-	end), [POST] = card(feathered) }
-	local deps: Image.QaDeps = {
-		exists = function(path: string): boolean
-			return files[path] ~= nil
-		end,
-		read = function(path: string): string
-			return files[path] or error("spec harness read " .. path)
-		end,
-	}
-
-	local function artifact(id: string, locator: string, digest: string): Generate.Artifact
-		return {
-			id = id,
-			digest = digest,
-			digestAlgorithm = "sha256",
-			mediaType = Measure.MEDIA_TYPE,
-			byteCount = #files[locator],
-			locator = locator,
-			metadata = {},
-		}
-	end
-
-	local function laneDocument(matte: boolean): Image.RequestDocument
-		return {
-			schema = REQUEST_CONFIG.schema,
-			briefId = BRIEF.id,
-			artifacts = {
-				{
-					id = "card.matte.v1",
-					slug = "card",
-					role = "cutout-card",
-					tiles = false,
-					transparentBackground = true,
-					singleSubject = false,
-				},
-			},
-			matte = matte,
-			bindings = {
-				matte = {
-					kind = "matte",
-					sourceId = "card.original.v1",
-					outputId = "card.matte.v1",
-					outputPath = POST,
-				},
-			},
-		}
-	end
-
-	it("returns the produced gate alone when the lane applied no matte and no register", function()
-		local plain: Image.RequestDocument = laneDocument(false)
-		plain.bindings = {}
-		plain.artifacts[1].id = "card.original.v1"
-		local produced = Lane.summary(CONFIG, deps, plain, { artifact("card.original.v1", POST, string.rep("a", 8)) })
-		expect(produced.status):toBe "produced"
-		expect(produced.preMatte):toBeNil()
-		expect(produced.matte):toBeNil()
-	end)
-
-	it("records a before gate, an after gate, and both digests when a matte was applied", function()
-		local summary = Lane.summary(CONFIG, deps, laneDocument(true), {
-			artifact("card.original.v1", PRE, string.rep("b", 8)),
-			artifact("card.matte.v1", POST, string.rep("c", 8)),
-		})
-		expect(summary.status):toBe "produced"
-		expect(assert(summary.matte).applied):toBe(true)
-		expect(assert(summary.matte).parameters.featherRadius):toBe(MATTE_PARAMETERS.featherRadius)
-		expect(assert(summary.matte).sha256["card.matte.v1"].preMatteSha256):toBe(string.rep("b", 8))
-		expect(assert(summary.matte).sha256["card.matte.v1"].postMatteSha256):toBe(string.rep("c", 8))
-		expect(assert(summary.preMatte).status):toBe "refused"
-		expect(assert(summary.postMatte).status):toBe "produced"
-	end)
-
-	it("locates only the delivered image artifacts a receipt carries", function()
-		local located = Lane.delivered {
-			artifact("card.matte.v1", POST, string.rep("c", 8)),
-			{
-				id = "note",
-				digest = "d",
-				digestAlgorithm = "sha256",
-				mediaType = "text/plain",
-				locator = "note.txt",
-				metadata = {},
-			},
-		}
-		expect(located["card.matte.v1"]):toBe(POST)
-		expect(located.note):toBeNil()
 	end)
 end)
 

@@ -257,7 +257,7 @@ local function runStage(config: Config, deps: Deps, request: Request, attempt: n
 	if not measured.ok then
 		return rejected(measured.diagnostic)
 	end
-	local measurement = measured.measurement :: Measure.Measurement
+	local measurement = measured.measurement
 
 	local candidate = Measure.artifact(config.measure, resolved.candidateId, resolved.imagePath, measurement)
 	local parents: { Generate.ParentRef } = {}

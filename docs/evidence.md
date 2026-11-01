@@ -13,7 +13,7 @@ Record commits, commands and exit codes in the change report.
 | WAVE measurement, ffmpeg command construction and parsed tool output | [Media](../tests/media.lute.verify.luau) | A measurement is not an audition. |
 | Asset and dependency census, ownership, credential subject and binary readback | [Asset lane](../tests/asset-lane.lute.verify.luau) | Scripted replies prove validation. Metadata cannot prove remote content equality or effective native load. |
 | Bounded readback retries, exact permission IDs and malformed replies | [Cloud contracts](../tests/cloud-contracts.lute.verify.luau) | Scripted transports prove refusal and call counts; they perform no remote mutations. |
-| Recipe binding, one provider attempt, immutable references, script and output drift, blind packets and measurements | [Image lane](../tests/image-lane.lute.verify.luau) | Mock process effects and consumer thresholds do not prove provider availability or acceptance. |
+| Typed host execution, one provider attempt, immutable references, script and output drift, blind packets and measurements | [Image lane](../tests/image-lane.lute.verify.luau) | Mock process effects and consumer thresholds do not prove provider availability or acceptance. |
 | Pixel transforms and measured image refusals | [Transforms](../tests/image-transforms.lute.verify.luau) | Small fixture codecs prove declared calculations. They do not prove all formats or perception. |
 | Authored-brief diagnostics and exact dependency resolution | [Consumer](../tests/consumer.verify.luau), [lint](../tests/lint.lute.verify.luau), [dependency](../tests/dependency-source.lute.verify.luau) | Static diagnostics support runtime checks. A pinned dependency is not live service evidence. |
 
