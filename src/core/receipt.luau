@@ -29,7 +29,6 @@ local function receiptFingerprint(receipt: Receipt): string
 		limitations = receipt.limitations,
 		costMicros = receipt.costMicros,
 		checkpoint = receipt.checkpoint,
-		publication = receipt.publication,
 	}
 end
 

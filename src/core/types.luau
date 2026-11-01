@@ -65,50 +65,6 @@ export type DeliveryContract = {
 	hostVerification: boolean?,
 }
 
-export type HostVerification = {
-	schemaVersion: number,
-	requested: boolean,
-	disposition: "verified" | "refused",
-	refusalReason: string?,
-	detail: string?,
-	contentId: string,
-	hostBuild: string,
-	windowSeconds: number,
-	measurements: { [string]: unknown },
-	diagnostics: { string },
-	captureRef: string?,
-	observationFingerprint: string?,
-}
-
-export type HostVerificationRequestPayload = {
-	schemaVersion: number,
-	receiptId: string,
-	sourceReceiptFingerprint: string,
-	briefFingerprint: string,
-	artifactId: string,
-	artifactDigest: string,
-	contentId: string,
-	version: string,
-	grantId: string,
-	grantFingerprint: string,
-	writeAheadDigest: string,
-	stateFingerprint: string,
-	host: string,
-	hostBuild: string,
-	windowSeconds: number,
-	binding: { [string]: unknown },
-}
-
-export type HostVerificationCompletion = {
-	requestFingerprint: string,
-	pendingReceiptFingerprint: string,
-	evidencePath: string,
-	evidenceDigest: string,
-	stateFingerprint: string,
-}
-
-export type HostVerificationRequest = HostVerificationRequestPayload & { fingerprint: string }
-
 export type BriefDraft = {
 	schemaVersion: number?,
 	id: string,
@@ -531,77 +487,6 @@ export type Checkpoint = {
 	costMicros: number,
 }
 
-export type PublicationStageStatus = "passed" | "refused" | "dry-run" | "spent" | "not-run"
-
-export type PublicationStageReport = {
-	id: string,
-	status: PublicationStageStatus,
-	detail: string?,
-}
-
-export type PublicationCredential = {
-	name: string,
-	exposed: boolean,
-}
-
-export type PublicationAttempt = {
-	ordinal: number,
-	stageId: string,
-	grantId: string,
-	grantFingerprint: string,
-	action: string,
-	semanticId: string,
-	state: string,
-	contentId: string?,
-	version: string?,
-	operationId: string?,
-	rollbackToken: string?,
-	detail: string?,
-}
-
-export type PublicationCompensation = {
-	ordinal: number,
-	stageId: string,
-	rollbackToken: string,
-	status: string,
-	detail: string,
-}
-
-export type PublicationState = "pending" | "confirmed" | "reconciled" | "stopped"
-
-export type PublicationRecord = {
-	schemaVersion: number,
-	disposition: string,
-	state: PublicationState,
-	detail: string?,
-	dryRun: boolean,
-	quarantined: boolean,
-	placeholder: boolean,
-	contentId: string?,
-	version: string?,
-	readback: StringMap?,
-	grantId: string?,
-	grantFingerprint: string?,
-	idempotencyKey: string?,
-	artifactId: string?,
-	artifactDigest: string?,
-	writeAheadPath: string?,
-	writeAheadDigest: string?,
-	credential: PublicationCredential,
-	attemptsAuthorised: number,
-	attemptsMade: number,
-	attempts: { PublicationAttempt },
-	compensations: { PublicationCompensation },
-	stages: { PublicationStageReport },
-	facts: { [string]: unknown },
-	verification: HostVerification?,
-	verificationRequest: HostVerificationRequest?,
-	verificationCompletion: HostVerificationCompletion?,
-	verificationRebindings: { { receiptFingerprint: string, requestFingerprint: string, hostBuild: string } }?,
-	reconciliation: { sourceReceiptFingerprint: string, evidencePath: string, evidenceDigest: string }?,
-	economics: StageEconomics?,
-}
-
 export type Receipt = {
 	schemaVersion: number,
 	id: string,
@@ -626,7 +511,6 @@ export type Receipt = {
 	limitations: { string },
 	costMicros: number,
 	checkpoint: Checkpoint?,
-	publication: PublicationRecord?,
 }
 
 export type DeliveryEntry = {

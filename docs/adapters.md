@@ -6,7 +6,7 @@ destinations, policy and final acceptance. The [API](api.md) defines the contrac
 | Task | Connection |
 | --- | --- |
 | Save a reviewed file or native object | [Direct delivery](api.md#direct-delivery) owns one attempt, durable recovery and moderation readback. |
-| Record a delivery outcome | [Publication records](api.md#delivery-destination-and-publication-records) bind destination facts. |
+| Declare a destination | [Destinations](api.md#delivery-destinations) bind an intended target; delivery journals retain actual outcomes. |
 | Measure or convert audio | [Media](api.md#media) connects process tools. |
 | Produce an image | [Image lane](api.md#image-lane) binds recipes, transforms, measurements and one provider attempt. |
 | Run a content compiler or DCC tool | [Process tools](api.md#process-tools) bind tool identity and output bytes. |

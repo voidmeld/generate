@@ -6,8 +6,8 @@ Consumers own art direction, budgets, credentials, destinations, rights policy a
 
 | Boundary | Responsibility |
 | --- | --- |
-| `src/core` | Briefs, plans, intersection of capability and authority, provenance, review, manifests, delivery destinations, publication records, host verification and recovery records. |
-| `src/roblox` | Roblox adapter, one module per job: reviewed file and native-object delivery, publication records, size units, asset readback, permission grants, reference provenance, asset audit, binary instance reading. |
+| `src/core` | Briefs, plans, intersection of capability and authority, provenance, review, manifests, delivery destinations and execution recovery records. |
+| `src/roblox` | Roblox adapter, one module per job: reviewed file and native-object delivery, destinations, size units, asset readback, permission grants, reference provenance, asset audit, binary instance reading. |
 | `src/media` | Audio measurement without a process. |
 | `src/image` | Recipe binding, one provider attempt, deterministic transforms, measurements and checks against consumer thresholds, and blind review packets. |
 | `src/lute` | Process and media tool bindings. |
@@ -25,7 +25,6 @@ Artifact SHA-256 digests bind bytes. They do not bind truthfulness or rights.
 - [Execution](api.md#generateexecute) owns authority checks, stage results and compensation.
 - [Review](api.md#generatebrief) owns the single decision, independence, blindness and byte bindings.
 - [Direct delivery](api.md#direct-delivery) owns file and native-object saves with moderation readback and recovery.
-- [Publication records](api.md#delivery-destination-and-publication-records) own the declared destination, the delivery receipt, its states and host verification.
 - [Native retention](native-codegen.md) owns preservation before cleanup.
 
 An accepted receipt establishes only the acceptance that the brief declares.

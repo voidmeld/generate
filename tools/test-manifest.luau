@@ -11,5 +11,5 @@ return table.freeze {
 	"tests/image-transforms.lute.verify.luau",
 	"tests/lint.lute.verify.luau",
 	"tests/media.lute.verify.luau",
-	"tests/roblox-publication.verify.luau",
+	"tests/roblox-destination.verify.luau",
 }

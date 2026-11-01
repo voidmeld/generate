@@ -17,8 +17,6 @@ Each document uses these terms with one meaning.
 | adapter | The package or module that binds Generate to one tool, platform or service. |
 | consumer | The code and the owner that use Generate. The consumer owns art direction, tools, rights, credentials, destinations and acceptance. |
 | destination | The place that receives delivered content. An adapter describes it and validates its descriptor. |
-| publication record | The delivery receipt of one destination. It names the content identity and a state: `pending`, `confirmed`, `reconciled` or `stopped`. |
-| host verification | An observation that delivered content was exercised in a named host build. |
 | packet | The exact candidate, evidence and rubric that one reviewer sees. A packet binds their digests. |
 | decision | The verdict of one reviewer about one packet: `approved`, `rejected` or `abstained`, with reasons. |
 | revision | One numbered version of a candidate. A ledger keeps the revisions in order. |

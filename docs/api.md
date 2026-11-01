@@ -7,7 +7,7 @@ Core owns those records. The consumer supplies art direction, host operations an
 | --- | --- |
 | Describe an asset and run its stages | [Brief, plan and execution](#brief-plan-and-execution) |
 | Review exact bytes and select delivery | [Review and delivery](#review-and-delivery) |
-| Declare the destination of a brief and record its outcome | [Delivery destination and publication records](#delivery-destination-and-publication-records) |
+| Declare the intended destination of a brief | [Delivery destinations](#delivery-destinations) |
 | Use Roblox: save, publish, grant, read back or audit assets | [Roblox adapter](#roblox-adapter) |
 | Measure, convert or render audio for review | [Media](#media) |
 | Bind a content compiler, a process tool or a reviewer | [Content, process and reviewer adapters](#content-process-and-reviewer-adapters) |
@@ -161,9 +161,9 @@ See [accepted delivery](../examples/accepted-manifest.generate.luau) and [revisi
 
 ---
 
-## Delivery destination and publication records
+## Delivery destinations
 
-A destination says where a brief delivers. A publication record says what happened there.
+A destination records the intended delivery target. Delivery outcomes belong to the transport journal and consumer verification.
 
 ### Declare the destination
 
@@ -177,50 +177,6 @@ Core refuses a descriptor with a secret-shaped key or a value that is not data.
 Credentials are never brief values. A descriptor can carry only the name of a credential.
 The destination is a record. Generate does not perform the publication.
 
-### Record the outcome
-
-A `PublicationRecord` is the delivery receipt of one destination. It contains these items:
-
-- the `disposition`, which is a name that the adapter chooses, and the `state`
-- the `contentId` and `version` that the destination assigned, and the `readback` of the destination
-- the `credential` name and a `false` exposure attestation
-- the attempt journal, the compensation journal, the stages and the optional economics
-- `facts`, an adapter-owned data table
-- an optional `verification`, `verificationRequest` and `verificationCompletion`
-
-A record is always `quarantined`. Promotion is the decision of the consumer.
-`dryRun` and `placeholder` are explicit booleans.
-
-### States
-
-The state of a record says how far its destination settled.
-
-| State | Meaning |
-| --- | --- |
-| `pending` | The destination has not settled. Confirm it later. |
-| `confirmed` | The destination settled. |
-| `reconciled` | Source-bound read-only evidence recovered a stopped record. Confirm it later. |
-| `stopped` | The record is final. It is a refusal, a dry run, a partial result or a failed recovery. |
-
-- `Generate.attachPublication(receipt, record)` binds a quarantined, secret-free record to an unchanged receipt. It refuses a receipt that already records a non-dry-run attempt.
-- `Generate.confirmPublication(receipt, record)` replaces only a `pending` or `reconciled` record.
-- `Generate.reconcilePublication(receipt, record)` accepts only a source-bound recovery of a `stopped` record. That record has one failed-readback create and one failed compensation. The new record keeps the attempt history.
-- `Generate.publicationFault(record)` returns the first generic fault of a record, or `nil`.
-
-Each call returns a receipt with a new fingerprint.
-Use records from the consumer delivery path. Do not replace them with manually written acceptance claims.
-
-### Host verification
-
-A host verification record describes a test of delivered content in a named host build.
-It has a `contentId`, a `hostBuild`, an observation window, adapter `measurements`, scanned `diagnostics` and a `verified` or `refused` disposition.
-A `refused` record names a refusal reason.
-
-- A `verificationRequest` binds the exact publication identity, the source receipt, the host and the host build. It defers verification.
-- `confirmPublication` completes a request only with a `verificationCompletion` that binds the request and the pending receipt.
-- `confirmPublication` can also rebind an uncompleted request to a different `hostBuild`. It keeps the prior lineage in `verificationRebindings`.
-- `Generate.hostVerified(receipt)` is `true` only for an accepted receipt with a confirmed, non-dry-run, non-placeholder record and a `verified` observation of the same `contentId`.
-
 ## Roblox adapter
 
 The Roblox adapter binds Generate to Roblox: it saves, publishes, grants, reads back and audits assets.
@@ -230,46 +186,30 @@ Each module does one job.
 | Task | Module |
 | --- | --- |
 | Save a reviewed file or native object without a brief | [`Roblox.delivery`](#direct-delivery) |
-| Describe a Roblox destination and record its publication facts | [`Roblox.publicationRecord`](#publication-records) |
+| Describe a Roblox destination | `Roblox.destination` and `Roblox.readDestination` |
 | Let a universe use assets that your creator owns | [`Roblox.permissionGrant`](#permission-grants) |
 | Read an asset, its owner and its moderation state | [`Roblox.assetReadback`](#asset-readback) |
 | Prove the provenance of a reference image and add its row to a manifest | [`Roblox.referenceProvenance`](#reference-provenance) |
 | Audit the reference rows of a manifest | [`Roblox.assetAudit`](#asset-audit) |
 | Read a binary instance file | [`Roblox.rbxm`](#binary-instance-files) |
-| Convert a size to studs | [`Roblox.units`](#publication-records) |
+| Convert a size to studs | [`Roblox.units`](#destinations-and-units) |
 
 `Roblox.delivery` owns reviewed file uploads and native-object saves, with one-attempt journals, moderation readback and recovery. It needs no brief.
 
 The transport types are `Roblox.CloudRequest`, `Roblox.CloudResponse` and `Roblox.CloudSend`.
 `send(request)` receives a `CloudRequest` and returns a `CloudResponse` with `ok`, `status` and `body`.
 
-### Publication records
+### Destinations and units
 
-`Roblox.publicationRecord` describes a Roblox destination and maps Roblox facts onto the [publication records](#delivery-destination-and-publication-records). Core never reads them.
-
-| Task | Call |
-| --- | --- |
-| Declare a destination | `Roblox.publicationRecord.destination(draft)` returns a `Generate.Destination` with the adapter name `roblox`. |
-| Read a destination | `Roblox.publicationRecord.readDestination(destination)` returns the typed fields. |
-| Build the facts of a record | `Roblox.publicationRecord.facts(facts)` returns the `facts` table. It holds `universeGrants`, `dependencyGrants` and an optional `accessClosure`. |
-| Read the facts of a record | `Roblox.publicationRecord.readFacts(record)` returns the typed facts. |
-| Build a verification request | `Roblox.publicationRecord.request(draft)` maps the creator, universes, place, consumer, Studio version and build onto the generic request. |
-| Find the first fault of a record | `Roblox.publicationRecord.recordFault(record)` |
-| Attach a record to a receipt | `Roblox.publicationRecord.attach(receipt, record)` |
-| Confirm a pending record | `Roblox.publicationRecord.confirm(receipt, record)` |
-| Reconcile a stopped record | `Roblox.publicationRecord.reconcile(receipt, record)` |
-| Test host verification | `Roblox.publicationRecord.hostVerified(receipt)` |
-| Match a refusal reason | `Roblox.publicationRecord.REFUSAL_REASONS` lists the reasons. |
-| Convert a size to studs | `Roblox.units.studs(size)` converts a size in metres, centimetres or millimetres. One stud is 0.28 metres. |
+`Roblox.destination(draft)` validates and normalizes a Roblox destination as a `Generate.Destination`.
+`Roblox.readDestination(destination)` reads the typed fields and refuses a descriptor that is not normalized.
+Both preserve the declared creator, asset type, restricted visibility and optional universe requirements.
+`Roblox.units.studs(size)` converts metres, centimetres or millimetres; one stud is 0.28 metres.
 
 The destination descriptor requires `creator`, `assetType`, `visibility` and `credentialName`.
 The `creator` is `group` or `user`. The `visibility` is `private` or `restricted`.
 Optional fields are `assetId`, `displayName`, `description`, `grantUniverses` and `verifyDependencies`.
 Public visibility is refused. `verifyDependencies` needs `grantUniverses`.
-
-The Roblox functions run the Roblox checks and then the generic calls.
-`Roblox.publicationRecord.confirm` also checks the bound access closure of an `access-closure-pending` record.
-`Roblox.publicationRecord.reconcile` accepts only a `failed-compensation` record with unattempted access.
 
 A brief declares `constraints.maxSize = { x, y, z, unit = "m" }`. The unit defaults to metres. Convert the size in the adapter, not in the brief.
 

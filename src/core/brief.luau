@@ -1,7 +1,7 @@
 --!strict
 
 local Canonical = require "./canonical"
-local Publication = require "./publication"
+local Destination = require "./destination"
 local Secret = require "./secret"
 local Types = require "./types"
 
@@ -89,7 +89,7 @@ local function create(draft: BriefDraft): Brief
 	Secret.validate(draft.constraints or {}, "Generate brief constraints")
 	Secret.validate(draft.metadata or {}, "Generate brief metadata")
 	local destination, hostVerification =
-		Publication.destination(draft.delivery.destination, draft.delivery.hostVerification)
+		Destination.normalize(draft.delivery.destination, draft.delivery.hostVerification)
 	local views = uniqueStrings(draft.review.views, "review.views")
 	if #views == 0 then
 		error("Generate brief review.views must name at least one canonical view", 2)

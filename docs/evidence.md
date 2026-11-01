@@ -6,7 +6,7 @@ Record commits, commands and exit codes in the change report.
 
 | Contract | Executable evidence | Limit |
 | --- | --- | --- |
-| Roblox destination, publication facts, verification requests, closure and reconcile checks, size units | [Roblox publication](../tests/roblox-publication.verify.luau) | Fixture records prove validation and refusal. They cannot prove that a destination accepted the content or that a host ran it. |
+| Roblox destination validation and size units | [Destinations](../tests/roblox-destination.verify.luau) | These checks neither upload content nor prove native loading. |
 | Deterministic plan, authority, lineage, strict independent review and unchanged-receipt continuation | [Core](../tests/core.verify.luau) | Injected effects do not prove truthful rights, review independence or provider output. |
 | Verify artifact checks and external process outputs | [Adapters](../tests/adapters.lute.verify.luau) | A successful process does not prove content quality or live native behavior. |
 | One-attempt record, stop-on-refusal, ambiguous-outcome recovery, moderation readback, native save and resume | [Delivery](../tests/delivery.lute.verify.luau) | Scripted transports prove the contract. They cannot prove live moderation, ownership or that an asset loads. |

@@ -27,19 +27,31 @@ local function dimension(value: unknown, axis: string): number
 	if type(value) ~= "number" or value ~= value or value <= 0 or value == math.huge then
 		error(("Generate Roblox size %s must be a positive finite number"):format(axis), 3)
 	end
-	return value :: number
+	return value
 end
 
-local function studs(size: Size): Studs
-	local unit = size.unit or "m"
+local function studs(size: unknown): Studs
+	if type(size) ~= "table" then
+		error("Generate Roblox size must be a table", 2)
+	end
+	local fields: { [string]: unknown } = {}
+	for key, value in size do
+		if type(key) == "string" then
+			fields[key] = value
+		end
+	end
+	local unit = fields.unit or "m"
+	if type(unit) ~= "string" then
+		error("Generate Roblox size unit must be m, cm or mm", 2)
+	end
 	local scale = METRES_PER_UNIT[unit]
 	if scale == nil then
 		error("Generate Roblox size unit must be m, cm or mm", 2)
 	end
 	return {
-		x = dimension(size.x, "x") * scale / METRES_PER_STUD,
-		y = dimension(size.y, "y") * scale / METRES_PER_STUD,
-		z = dimension(size.z, "z") * scale / METRES_PER_STUD,
+		x = dimension(fields.x, "x") * scale / METRES_PER_STUD,
+		y = dimension(fields.y, "y") * scale / METRES_PER_STUD,
+		z = dimension(fields.z, "z") * scale / METRES_PER_STUD,
 	}
 end
 
