@@ -56,6 +56,7 @@ local lint: { string } = { "lute", "lint", "--verbose", "-c", "lint.config.luau"
 local types: { string } = {
 	"luau-lsp",
 	"analyze",
+	"--flag:LuauSolverV2=true",
 	"--platform=standard",
 	"--base-luaurc=.luaurc",
 	"--ignore=**/.lute/**",
