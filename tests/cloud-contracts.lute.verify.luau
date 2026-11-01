@@ -125,14 +125,7 @@ describe("cloud response contracts", function()
 
 	it("retains the HTTP result when the permission response is malformed JSON", function()
 		local reads = 0
-		local request: Permission.Request = {
-			endpoint = Permission.ENDPOINT,
-			method = "PATCH",
-			headerNames = {},
-			body = "{}",
-			universeId = 123,
-			requestedAssetIds = { "77" },
-		}
+		local request = Permission.prepare(Lute.encode, 123, { "77" })
 		local result = Permission.attempt(function(): Wire.Response
 			reads += 1
 			return { ok = true, status = 200, body = "malformed" }
