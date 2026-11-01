@@ -25,23 +25,21 @@ local function db(linear: number): number
 	return math.max(FLOOR_DB, 20 * math.log10(linear))
 end
 
-local function sampleReader(bits: number, float: boolean): ((bytes: string, offset: number) -> number)?
+local function sampleReader(bits: number, float: boolean): ((bytes: buffer, offset: number) -> number)?
 	if float and bits == 32 then
-		return function(bytes, offset)
-			return string.unpack("<f", bytes, offset) :: number
-		end
+		return buffer.readf32
 	end
 	if float then
 		return nil
 	end
 	if bits == 16 then
 		return function(bytes, offset)
-			return (string.unpack("<i2", bytes, offset) :: number) / 32768
+			return buffer.readi16(bytes, offset) / 32768
 		end
 	end
 	if bits == 24 then
 		return function(bytes, offset)
-			local value = string.unpack("<I3", bytes, offset) :: number
+			local value = buffer.readu16(bytes, offset) + buffer.readu8(bytes, offset + 2) * 65536
 			if value >= 8388608 then
 				value -= 16777216
 			end
@@ -50,7 +48,7 @@ local function sampleReader(bits: number, float: boolean): ((bytes: string, offs
 	end
 	if bits == 32 then
 		return function(bytes, offset)
-			return (string.unpack("<i4", bytes, offset) :: number) / 2147483648
+			return buffer.readi32(bytes, offset) / 2147483648
 		end
 	end
 	return nil
@@ -60,19 +58,22 @@ local function measure(bytes: string): Outcome
 	if #bytes < 44 or string.sub(bytes, 1, 4) ~= "RIFF" or string.sub(bytes, 9, 12) ~= "WAVE" then
 		return { ok = false, diagnostic = "the file is not a RIFF WAVE container" }
 	end
+	local data = buffer.fromstring(bytes)
 	local format: { tag: number, channels: number, rate: number, bits: number }? = nil
 	local dataStart, dataLength = nil, 0
 	local position = 13
 	while position + 8 <= #bytes + 1 do
 		local id = string.sub(bytes, position, position + 3)
-		local size = string.unpack("<I4", bytes, position + 4) :: number
+		local size = buffer.readu32(data, position + 3)
 		if id == "fmt " then
-			local tag, channels, rate, _, _, bits = string.unpack("<I2I2I4I4I2I2", bytes, position + 8)
+			if size < 16 or position + 7 + size > #bytes then
+				return { ok = false, diagnostic = "the WAVE format chunk is incomplete" }
+			end
 			format = {
-				tag = tag :: number,
-				channels = channels :: number,
-				rate = rate :: number,
-				bits = bits :: number,
+				tag = buffer.readu16(data, position + 7),
+				channels = buffer.readu16(data, position + 9),
+				rate = buffer.readu32(data, position + 11),
+				bits = buffer.readu16(data, position + 21),
 			}
 		elseif id == "data" then
 			dataStart = position + 8
@@ -104,7 +105,10 @@ local function measure(bytes: string): Outcome
 	for frame = 0, frames - 1 do
 		local framePeak = 0
 		for channel = 0, waveFormat.channels - 1 do
-			local value = read(bytes, dataStart + (frame * waveFormat.channels + channel) * width)
+			local value = read(data, dataStart - 1 + (frame * waveFormat.channels + channel) * width)
+			if value ~= value or math.abs(value) == math.huge then
+				return { ok = false, diagnostic = "the WAVE file holds a non-finite audio sample" }
+			end
 			local magnitude = math.abs(value)
 			squares += value * value
 			framePeak = math.max(framePeak, magnitude)

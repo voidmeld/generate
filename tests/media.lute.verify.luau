@@ -44,6 +44,45 @@ describe("wav measurement", function()
 		expect(Media.wav.measure("not audio").ok):toBe(false)
 		expect(Media.wav.measure(string.sub(Media.wav.encode(RATE, 1, { 0.1 }), 1, 40)).ok):toBe(false)
 	end)
+
+	it("decodes signed PCM widths and floating point samples", function()
+		for _, sample in
+			{
+				{ tag = 1, bits = 16, bytes = string.pack("<i2i2", -16384, 16384) },
+				{ tag = 1, bits = 24, bytes = string.char(0, 0, 192, 0, 0, 64) },
+				{ tag = 1, bits = 32, bytes = string.pack("<i4i4", -1073741824, 1073741824) },
+				{ tag = 3, bits = 32, bytes = string.pack("<ff", -0.5, 0.5) },
+			}
+		do
+			local width = sample.bits // 8
+			local bytes = "RIFF"
+				.. string.pack("<I4", 36 + #sample.bytes)
+				.. "WAVEfmt "
+				.. string.pack("<I4I2I2I4I4I2I2", 16, sample.tag, 1, RATE, RATE * width, width, sample.bits)
+				.. "data"
+				.. string.pack("<I4", #sample.bytes)
+				.. sample.bytes
+			local result = Media.wav.measure(bytes)
+			assert(result.ok)
+			expect(result.measurement.frames):toBe(2)
+			expect(result.measurement.peak):toBe(0.5)
+		end
+	end)
+
+	it("refuses truncated format chunks and non-finite float samples", function()
+		local encoded = Media.wav.encode(RATE, 1, { 0.5 })
+		local truncated = string.sub(encoded, 1, 16) .. string.pack("<I4", 65536) .. string.sub(encoded, 21)
+		expect(Media.wav.measure(truncated).ok):toBe(false)
+		for _, value in { math.huge, math.nan } do
+			local bytes = "RIFF"
+				.. string.pack("<I4", 40)
+				.. "WAVEfmt "
+				.. string.pack("<I4I2I2I4I4I2I2", 16, 3, 1, RATE, RATE * 4, 4, 32)
+				.. "data"
+				.. string.pack("<I4f", 4, value)
+			expect(Media.wav.measure(bytes).ok):toBe(false)
+		end
+	end)
 end)
 
 describe("media adapters", function()
@@ -87,6 +126,9 @@ describe("media adapters", function()
 		assert(probe.ok)
 		expect(probe.probe.durationSeconds):toBe(1)
 		expect(probe.probe.codec):toBe "pcm_s16le"
+		expect(probe.probe.sampleRate):toBe(RATE)
+		expect(probe.probe.channels):toBe(1)
+		expect(probe.probe.bitRate):toBe(128000)
 		local loudness = Lute.media.loudness("a.wav", function()
 			return {
 				ok = true,
@@ -98,6 +140,23 @@ describe("media adapters", function()
 		assert(loudness.ok)
 		expect(loudness.loudness.integratedLufs):toBe(-23.4)
 		expect(loudness.loudness.truePeakDbfs):toBe(-6.1)
+	end)
+
+	it("refuses malformed and non-finite probe metadata", function()
+		for _, stdout in
+			{
+				'{"streams":42,"format":{"duration":"1"}}',
+				'{"streams":[42],"format":{"duration":"1"}}',
+				'{"streams":[{"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":{},"channels":1}],"format":{"duration":"1"}}',
+				'{"streams":[{"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"8000","channels":1}],"format":{"duration":"1e999"}}',
+				'{"streams":[{"codec_type":"audio","codec_name":"pcm_s16le","sample_rate":"8000","channels":0}],"format":{"duration":"1"}}',
+			}
+		do
+			local result = Lute.media.probe("a.wav", function()
+				return { ok = true, stdout = stdout, stderr = "", exitcode = 0 }
+			end)
+			expect(result.ok):toBe(false)
+		end
 	end)
 
 	it("converts, probes, measures loudness and renders a review image with real ffmpeg", function()

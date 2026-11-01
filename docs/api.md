@@ -576,6 +576,10 @@ Hashes bind retained bytes. They do not prove that the host ran the call truthfu
 
 Media measures, converts and renders audio for review.
 
+WAVE measurement supports 16-, 24- and 32-bit PCM and 32-bit float samples. It refuses incomplete
+format chunks and non-finite samples. Probe metadata requires a finite nonnegative duration,
+a codec name, a positive whole sample rate and a positive whole channel count.
+
 | Task | Call |
 | --- | --- |
 | Measure PCM and float WAVE bytes without a process: duration, peak, RMS, silent fraction and leading silence | `Media.wav.measure` |
