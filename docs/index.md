@@ -23,14 +23,11 @@ Each document uses these terms with one meaning.
 | decision | The verdict of one reviewer about one packet: `approved`, `rejected` or `abstained`, with reasons. |
 | revision | One numbered version of a candidate. A ledger keeps the revisions in order. |
 | rights fact | One of `source`, `license`, `owner` and `consent`. A brief can require facts before delivery. |
-| quota | A measured value and its ceiling, or a kind and its allowed kinds. |
-| capture bracket | The declared order and poses of the captures that serve as review evidence. |
 | grant | The authority that allows one bounded Roblox action: one publication attempt, or the use of assets by a universe. |
 | readback | A read of the destination after a change. It checks the creator, the type, the version and the moderation state. |
 | census | A readback of a root asset and the dependencies that the caller names. It reports owners, moderation and unresolved IDs. |
 | disposition | The name of an outcome of a publication or transaction, for example `published` or `refused`. |
 | rollback token | The opaque handle that undoes one mutation. |
-| transcript | The retained record of Studio calls and results. It binds their bytes by SHA-256. |
 | threshold | A pass line or a measurement parameter that the consumer declares. Generate supplies no default. |
 | review | The resolution of one packet by its one eligible decision. It is `approved`, `rejected`, `unresolved`, `incomplete` or `stale`. |
 

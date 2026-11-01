@@ -1,11 +1,9 @@
 --!strict
 
 local AssetAudit = require "./roblox/asset-audit"
-local AssetPublication = require "./roblox/asset-publication"
 local AssetReadback = require "./roblox/asset-readback"
 local ReferenceProvenance = require "./roblox/reference-provenance"
 local Delivery = require "./roblox/delivery"
-local NativeTranscript = require "./roblox/native-transcript"
 local PermissionGrant = require "./roblox/permission-grant"
 local PublicationRecord = require "./roblox/publication-record"
 local Rbxm = require "./roblox/rbxm"
@@ -45,15 +43,6 @@ export type DeliveryRow = Delivery.Row
 export type DeliveryQueueResult = Delivery.QueueResult
 export type DeliveryNativeHost = Delivery.NativeHost
 export type DeliveryNativeRequest = Delivery.NativeRequest
-export type NativeBinding = NativeTranscript.Binding
-export type NativeCallDraft = NativeTranscript.CallDraft
-export type NativeCodec = NativeTranscript.Codec
-export type NativeBoundPlan = NativeTranscript.BoundPlan
-export type NativeTranscriptRecord = NativeTranscript.Transcript
-export type NativeExecuteHost = NativeTranscript.ExecuteHost
-export type NativeReadHost = NativeTranscript.ReadHost
-export type NativeCaps = NativeTranscript.Caps
-export type NativeVerified = NativeTranscript.Verified
 export type PermissionAuthorityOptions = PermissionGrant.AuthorityOptions
 export type PermissionCredential = PermissionGrant.Credential
 export type PermissionAssignedRole = PermissionGrant.AssignedRole
@@ -95,17 +84,8 @@ export type PermissionRequestResult = PermissionRequestModule.Result
 export type CloudRequest = Wire.AuthorizedRequest
 export type CloudResponse = Wire.Response
 export type CloudSend = Wire.SendAuthorized
-export type AssetPublicationAdapter = AssetPublication.Adapter
-export type AssetPublicationGrant = AssetPublication.Grant
-export type AssetPublicationOperations = AssetPublication.Operations
-export type AssetPublicationOptions = AssetPublication.Options
-export type AssetPublicationRequest = AssetPublication.PublicationRequest
-export type AssetPublicationStage = AssetPublication.Stage
-export type AssetPublicationTransaction = AssetPublication.Transaction
-
 return {
 	assetAudit = AssetAudit,
-	assetPublication = AssetPublication,
 	assetReadback = {
 		SOURCES = AssetReadback.SOURCES,
 		UNOBSERVABLE = AssetReadback.UNOBSERVABLE,
@@ -113,7 +93,6 @@ return {
 		census = AssetReadback.census,
 	},
 	delivery = Delivery,
-	nativeTranscript = NativeTranscript,
 	permissionGrant = PermissionGrant,
 	publicationRecord = PublicationRecord,
 	rbxm = {

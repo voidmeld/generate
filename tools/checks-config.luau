@@ -96,13 +96,6 @@ local config: {
 					end,
 				},
 				{
-					prefix = "Agent",
-					entry = "src/agent/init.luau",
-					load = function(): unknown
-						return require "../src/agent"
-					end,
-				},
-				{
 					prefix = "Roblox",
 					entry = "src/roblox/init.luau",
 					load = function(): unknown
@@ -121,13 +114,6 @@ local config: {
 					entry = "src/image/init.luau",
 					load = function(): unknown
 						return require "../src/image"
-					end,
-				},
-				{
-					prefix = "Content",
-					entry = "src/content/init.luau",
-					load = function(): unknown
-						return require "../src/content"
 					end,
 				},
 				{

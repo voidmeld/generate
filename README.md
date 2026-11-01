@@ -1,8 +1,8 @@
 # Generate
 
-Generate is a content generation library for Luau. It turns a brief into a plan,
-candidate files, review decisions and delivery records. It supports images, 3D models,
-animation, audio, voice and structured content.
+Generate supplies reusable game asset production tools for Luau: image transforms and checks,
+audio measurement and process bindings, Roblox delivery, and review records bound to exact bytes.
+Consumers supply authoring tools for images, models, animation, audio, voice and structured content.
 
 First, install the pinned tools from the repository root:
 
@@ -36,7 +36,6 @@ Use this page to select a document. Each document owns one subject.
 | [Contributor guide](AGENTS.md) | Source change rules and validation. |
 | [Provenance](PROVENANCE.md) | Source and dependency ownership. |
 | [License](LICENSE) | MIT License. |
-| [Change report](ready.md) | Changes, checks and limits for this candidate. |
 
 ## Validate
 
