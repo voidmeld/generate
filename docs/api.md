@@ -37,6 +37,7 @@ A brief declares an asset. A plan orders its stages. Execution runs the stages u
 `brief(draft) -> Brief`
 
 `Generate.brief` declares one asset. It makes a schema-v1 record with identity, kind, intent, delivery, review and provenance.
+Brief metadata uses the open `Metadata` data map and contributes to its fingerprint. Validation rejects executable values, cycles, non-finite numbers and secret-shaped keys at every depth.
 
 - Every contract requires exactly one decision. One decision covers the entire rubric.
 - The contract has no decision count and no rule. The default for `independence` is `required`.

@@ -214,6 +214,30 @@ local function reviewOutcomes(
 end
 
 describe("Generate briefs and plans", function()
+	it("preserves structured brief metadata and binds it to the fingerprint", function()
+		local draft: Generate.BriefDraft = {
+			id = "fixture.metadata",
+			kind = "image",
+			intent = { role = "metadata contract" },
+			review = { rubric = RUBRIC.id, rubricFingerprint = RUBRIC.fingerprint, views = { "front" } },
+			delivery = { semanticId = "fixture.metadata", target = "fixture-host" },
+			metadata = { retained = { path = "source.png", dimensions = { 32, 64 }, inspected = false } },
+		}
+		local value = Generate.brief(draft)
+		expect(value.metadata):toEqual(draft.metadata)
+		local changed = table.clone(value)
+		changed.metadata = { retained = { path = "source.png", dimensions = { 64, 64 }, inspected = false } }
+		expect(Generate.briefFingerprint(value) == Generate.briefFingerprint(changed)):toEqual(false)
+		draft.metadata = { retained = { measure = math.huge } }
+		expect(function()
+			Generate.brief(draft)
+		end):toThrow "non-finite"
+		draft.metadata = { retained = { read = function() end } }
+		expect(function()
+			Generate.brief(draft)
+		end):toThrow "executable"
+	end)
+
 	it("keeps the simple path to four ordinary calls", function()
 		local value = brief()
 		local plan = Generate.plan(value, { { id = "make", operation = "generate" } })
