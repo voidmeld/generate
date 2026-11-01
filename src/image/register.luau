@@ -252,7 +252,7 @@ local function run(config: Config, bytes: string, target: Target): Result
 	if not decoded.ok then
 		return { ok = false, reason = decoded.reason }
 	end
-	local image = decoded.image :: Codec.Image
+	local image = decoded.image
 	if image.channels ~= 3 and image.channels ~= 4 then
 		return { ok = false, reason = "register requires an RGB or RGBA PNG" }
 	end

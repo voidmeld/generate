@@ -27,6 +27,13 @@ export type Deps = { exists: (path: string) -> boolean, read: (path: string) -> 
 local PNG_SIGNATURE = "\137PNG\r\n\26\n"
 local MEDIA_TYPE = "image/png"
 
+local function bigEndian(bytes: buffer, offset: number): number
+	return buffer.readu8(bytes, offset) * 16777216
+		+ buffer.readu8(bytes, offset + 1) * 65536
+		+ buffer.readu8(bytes, offset + 2) * 256
+		+ buffer.readu8(bytes, offset + 3)
+end
+
 local function pngDimensions(bytes: string): (number?, number?, string)
 	if #bytes < 24 or string.sub(bytes, 1, 8) ~= PNG_SIGNATURE then
 		return nil, nil, "the saved file does not carry a PNG signature"
@@ -34,8 +41,9 @@ local function pngDimensions(bytes: string): (number?, number?, string)
 	if string.sub(bytes, 13, 16) ~= "IHDR" then
 		return nil, nil, "the saved PNG does not open with an IHDR chunk"
 	end
-	local width = string.unpack(">I4", bytes, 17)
-	local height = string.unpack(">I4", bytes, 21)
+	local header = buffer.fromstring(string.sub(bytes, 17, 24))
+	local width = bigEndian(header, 0)
+	local height = bigEndian(header, 4)
 	return width, height, ""
 end
 
