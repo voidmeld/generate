@@ -3,7 +3,6 @@
 local Codec = require "./image/codec"
 local Deliver = require "./image/deliver"
 local Host = require "./image/host"
-local Lane = require "./image/lane"
 local Matte = require "./image/matte"
 local Measure = require "./image/measure"
 local Postprocess = require "./image/postprocess"
@@ -31,8 +30,6 @@ export type HostDeps = Host.Deps
 export type HostOptions = Host.Options
 export type HostTool = Host.Tool
 export type HostTools = Host.Tools
-export type LaneConfig = Lane.Config
-export type LaneSummary = Lane.Summary
 export type MatteParameters = Matte.Parameters
 export type MatteResult = Matte.Result
 export type MatteSuccess = Matte.Success
@@ -65,12 +62,7 @@ export type RegisterDeclarationTarget = Register.DeclarationTarget
 export type RegisterFacts = Register.Facts
 export type RegisterTarget = Register.Target
 export type RegisterValues = Register.Values
-export type RequestArtifact = Request.Artifact
-export type RequestBound = Request.Bound
 export type RequestConfig = Request.Config
-export type RequestDecoded = Request.Decoded
-export type RequestDocument = Request.Document
-export type RequestRefusal = Request.Refusal
 export type ReviewConfig = Review.Config
 export type ReviewOutcome = Review.Outcome
 export type ReviewRequest = Review.Request
@@ -79,7 +71,6 @@ return {
 	codec = Codec,
 	deliver = { run = Deliver.run },
 	host = { create = Host.create },
-	lane = { summary = Lane.summary },
 	matte = { apply = Matte.apply, run = Matte.run },
 	measure = {
 		MEDIA_TYPE = Measure.MEDIA_TYPE,
@@ -93,9 +84,6 @@ return {
 	qa = { assess = Qa.assess, gate = Qa.gate },
 	register = { facts = Register.facts, run = Register.run },
 	request = {
-		fromBrief = Request.fromBrief,
-		decode = Request.decode,
-		bindings = Request.bindings,
 		encode = Request.encode,
 	},
 	review = { DEFAULT_CONFIG = Review.DEFAULT_CONFIG, stage = Review.stage, runStage = Review.runStage },

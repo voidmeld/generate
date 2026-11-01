@@ -3,6 +3,8 @@
 local MAGIC = "<roblox!\137\255\r\n\26\n"
 local HEADER_SIZE = 32
 local ZSTD_MAGIC = "\40\181\47\253"
+local createNumbers: (number, number?) -> { number } = table.create
+local createStrings: (number, string?) -> { string } = table.create
 
 export type Reference = {
 	assetId: number,
@@ -162,7 +164,7 @@ local function readString(state: Cursor): string
 end
 
 local function readInterleavedU32(state: Cursor, count: number): { number }
-	local values: { number } = table.create(count)
+	local values = createNumbers(count)
 	local base = state.at
 	for index = 0, count - 1 do
 		local value = bit32.bor(
@@ -271,7 +273,7 @@ local function read(bytes: string): Document
 	local shared: { string } = {}
 	local classes: { [number]: Class } = {}
 	local order: { Class } = {}
-	for _, chunk in parsed :: { Chunk } do
+	for _, chunk in parsed do
 		if chunk.name == "SSTR" then
 			local state = cursor(chunk.payload)
 			readU32(state)
@@ -313,7 +315,7 @@ local function read(bytes: string): Document
 			uri = uri,
 		})
 	end
-	for _, chunk in parsed :: { Chunk } do
+	for _, chunk in parsed do
 		if chunk.name ~= "PROP" then
 			continue
 		end
@@ -347,7 +349,7 @@ local function read(bytes: string): Document
 			elseif valueType == TYPE_CONTENT then
 				local sources = readInterleavedU32(state, count)
 				local uriCount = readU32(state)
-				local uris: { string } = table.create(uriCount)
+				local uris = createStrings(uriCount)
 				for _ = 1, uriCount do
 					table.insert(uris, readString(state))
 				end
@@ -417,7 +419,7 @@ local function instances(bytes: string): Tree
 	local referentsByClass: { [number]: { number } } = {}
 	local byReferent: { [number]: Instance } = {}
 	local order: { Instance } = {}
-	for _, chunk in parsed :: { Chunk } do
+	for _, chunk in parsed do
 		if chunk.name == "SSTR" then
 			local state = cursor(chunk.payload)
 			readU32(state)
@@ -442,7 +444,7 @@ local function instances(bytes: string): Tree
 			end
 		end
 	end
-	for _, chunk in parsed :: { Chunk } do
+	for _, chunk in parsed do
 		if chunk.name == "PRNT" then
 			local state = cursor(chunk.payload)
 			readU8(state)
@@ -490,7 +492,7 @@ local function instances(bytes: string): Tree
 				elseif valueType == TYPE_CONTENT then
 					local sources = readInterleavedU32(state, #referents)
 					local uriCount = readU32(state)
-					local uris: { string } = table.create(uriCount)
+					local uris = createStrings(uriCount)
 					for _ = 1, uriCount do
 						table.insert(uris, readString(state))
 					end

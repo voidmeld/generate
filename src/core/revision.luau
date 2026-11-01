@@ -62,14 +62,14 @@ local function nonempty(value: unknown, label: string, level: number): string
 	if type(value) ~= "string" or value == "" then
 		error("Generate revision " .. label .. " must be a non-empty string", level)
 	end
-	return value :: string
+	return value
 end
 
 local function positiveInteger(value: unknown, label: string, level: number): number
 	if type(value) ~= "number" or value < 1 or value % 1 ~= 0 then
 		error("Generate revision " .. label .. " must be a positive integer", level)
 	end
-	return value :: number
+	return value
 end
 
 local function outcomeFor(review: ResolvedReview): RevisionOutcome
@@ -80,7 +80,7 @@ local function outcomeFor(review: ResolvedReview): RevisionOutcome
 	if mapped == nil then
 		error(("Generate revision cannot read review disposition %q"):format(tostring(review.disposition)), 2)
 	end
-	return mapped :: RevisionOutcome
+	return mapped
 end
 
 local function entryFor(review: ResolvedReview): RevisionEntryDraft
@@ -217,14 +217,15 @@ local function roll(current: RevisionLedger, draft: RollDraft): CandidateRevisio
 			error(("Generate revision artifacts repeat %q"):format(artifactId), 2)
 		end
 		seen[artifactId] = true
-		table.insert(artifacts, { id = artifactId, digest = reference.digest, digestAlgorithm = "sha256" })
+		local artifact: ArtifactRef = { id = artifactId, digest = reference.digest, digestAlgorithm = "sha256" }
+		table.insert(artifacts, artifact)
 	end
 	if #artifacts == 0 then
 		error("Generate revision roll must bind at least one candidate artifact digest", 2)
 	end
 	return {
 		candidateId = current.candidateId,
-		revision = revision :: number,
+		revision = revision,
 		producer = nonempty(draft.producer, "roll producer", 3),
 		artifacts = artifacts,
 	}

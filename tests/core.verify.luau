@@ -3,9 +3,12 @@
 local Test = require "./harness"
 
 local describe, it, expect = Test.describe, Test.it, Test.expect
+local protected = Test.protectedCall
 
-local Bracket = require "../src/core/evidence-bracket"
+local Canonical = require "../src/core/canonical"
+local Types = require "../src/core/types"
 local Generate = require "../src/core"
+local Destination = require "../src/core/destination"
 local Revision = require "../src/core/revision"
 local Host = require "../src/host"
 
@@ -76,11 +79,11 @@ local function evidenceArtifact(id: string, digest: string): Generate.Artifact
 	}
 end
 
-local KNOWN_RIGHTS = {
-	source = { state = "known" :: "known", value = "fixture:first-party" },
-	license = { state = "known" :: "known", value = "fixture:reserved" },
-	owner = { state = "known" :: "known", value = "fixture:studio" },
-	consent = { state = "known" :: "known", value = "fixture:not-applicable" },
+local KNOWN_RIGHTS: Types.RightsFactsDraft = {
+	source = { state = "known", value = "fixture:first-party" },
+	license = { state = "known", value = "fixture:reserved" },
+	owner = { state = "known", value = "fixture:studio" },
+	consent = { state = "known", value = "fixture:not-applicable" },
 }
 
 local function originalDerivation(id: string, digest: string): Generate.DerivationDraft
@@ -237,9 +240,21 @@ describe("Generate briefs and plans", function()
 				delivery = { semanticId = "bad", target = "local" },
 			}
 		end):toThrow()
-		expect(function()
-			brief(({ independence = "unknown" } :: unknown) :: BriefOptions)
-		end):toThrow()
+		local invalid = brief()
+		local ok, why = protected(Generate.brief, {
+			id = invalid.id,
+			kind = invalid.kind,
+			intent = invalid.intent,
+			delivery = invalid.delivery,
+			review = {
+				rubric = RUBRIC.id,
+				rubricFingerprint = RUBRIC.fingerprint,
+				views = { "front" },
+				independence = "unknown",
+			},
+		})
+		expect(ok):toEqual(false)
+		expect(tostring(why)):toContain "independence"
 	end)
 
 	it("produces the same plan fingerprint from the same declared data", function()
@@ -308,9 +323,45 @@ describe("Generate briefs and plans", function()
 		end):toThrow()
 	end)
 
+	it("copies typed plain records without sharing nested mutable state", function()
+		local original = { nested = { value = 1 }, labels = { "first", "second" } }
+		local copied = Canonical.copy(original)
+		copied.nested.value = 2
+		copied.labels[1] = "changed"
+		expect(original.nested.value):toBe(1)
+		expect(original.labels[1]):toBe "first"
+		expect(copied.nested.value):toBe(2)
+		expect(function()
+			Canonical.copy(setmetatable({}, {
+				__index = function()
+					error "executable metadata"
+				end,
+			}))
+		end):toThrow "plain tables"
+	end)
+
+	it("refuses non-string publication descriptor and constraint keys", function()
+		expect(function()
+			Destination.normalize({ adapter = "fixture", descriptor = { "unnamed" } }, false)
+		end):toThrow "descriptor requires string keys"
+		expect(function()
+			Generate.brief {
+				id = "fixture.constraints",
+				kind = "image",
+				intent = { role = "fixture" },
+				constraints = { "unnamed" },
+				review = { rubric = "fixture", rubricFingerprint = "fixture", views = { "front" } },
+				delivery = { semanticId = "fixture", target = "local" },
+			}
+		end):toThrow "constraints require string keys"
+	end)
+
 	it("rejects cyclic and non-finite canonical state", function()
 		local cyclic: { [string]: unknown } = {}
 		cyclic.self = cyclic
+		expect(function()
+			Canonical.copy(cyclic)
+		end):toThrow "cycles"
 		expect(function()
 			Generate.fingerprint(cyclic)
 		end):toThrow()
@@ -336,7 +387,7 @@ describe("Generate briefs and plans", function()
 	end)
 
 	it("refuses every executable plan field after compilation", function()
-		local mutators = {
+		local mutators: { (Generate.Stage) -> () } = {
 			function(stage: Generate.Stage)
 				stage.parameters.mode = "changed"
 			end,
@@ -528,12 +579,14 @@ describe("Generate review packets and review resolution", function()
 			"review",
 			packetDraft(1, "candidate", CANDIDATE_DIGEST, "front-view", EVIDENCE_DIGEST, "producer")
 		)
-		local contract = table.clone(value.review)
-		local changes = (contract :: unknown) :: { [string]: unknown }
-		changes.independence = "unknown"
-		expect(function()
-			Generate.resolveReview(packet, contract, {})
-		end):toThrow "declared independence"
+		local ok, why = protected(Generate.resolveReview, packet, {
+			rubric = value.review.rubric,
+			views = value.review.views,
+			blindness = value.review.blindness,
+			independence = "unknown",
+		}, {})
+		expect(ok):toEqual(false)
+		expect(tostring(why)):toContain "declared independence"
 		local review = Generate.resolveReview(
 			packet,
 			value.review,
@@ -562,10 +615,10 @@ describe("Generate review packets and review resolution", function()
 	end)
 end)
 
-describe("review contract retirement", function()
-	it("refuses a retired score-based acceptance contract instead of silently accepting it", function()
+describe("review contract fields", function()
+	it("refuses an unknown acceptance field", function()
 		expect(function()
-			Generate.brief({
+			Generate.brief {
 				id = "fixture.retired",
 				kind = "image",
 				intent = { role = "fixture" },
@@ -576,8 +629,8 @@ describe("review contract retirement", function()
 					secondaryAcceptance = { minScore = 0, reviewers = 1 },
 				},
 				delivery = { semanticId = "fixture", target = "local" },
-			} :: Generate.BriefDraft)
-		end):toThrow "review decision must approve"
+			}
+		end):toThrow "review carries unknown field secondaryAcceptance"
 	end)
 end)
 
@@ -586,11 +639,11 @@ describe("Generate structured provenance", function()
 		local derivation = Generate.derivation {
 			artifactId = "derived",
 			artifactDigest = SECOND_DIGEST,
-			origin = "derived" :: Generate.DerivationOrigin,
+			origin = "derived",
 			parents = {
 				{ artifactId = "candidate", artifactDigest = CANDIDATE_DIGEST },
 				{ receiptId = "earlier/receipt", jobId = "earlier/job", briefFingerprint = "gen-fp2-earlier" },
-			} :: { Generate.ParentRef },
+			},
 			inputDigests = { CANDIDATE_DIGEST },
 			referenceDigests = { EVIDENCE_DIGEST },
 			invocation = {
@@ -616,7 +669,7 @@ describe("Generate structured provenance", function()
 			Generate.derivation {
 				artifactId = "derived",
 				artifactDigest = SECOND_DIGEST,
-				origin = "derived" :: Generate.DerivationOrigin,
+				origin = "derived",
 				parents = {},
 			}
 		end):toThrow()
@@ -642,13 +695,13 @@ describe("Generate structured provenance", function()
 		local unknownParent = Generate.derivation {
 			artifactId = "candidate",
 			artifactDigest = CANDIDATE_DIGEST,
-			origin = "imported" :: Generate.DerivationOrigin,
+			origin = "imported",
 			parents = { { receiptId = "legacy/import-ledger" } },
 		}
 		local child = Generate.derivation {
 			artifactId = "derived",
 			artifactDigest = SECOND_DIGEST,
-			origin = "derived" :: Generate.DerivationOrigin,
+			origin = "derived",
 			parents = { { artifactId = "candidate", artifactDigest = CANDIDATE_DIGEST } },
 			rights = { license = { state = "known", value = "fixture:invented" } },
 		}
@@ -1004,7 +1057,7 @@ describe("Generate execution", function()
 					{
 						artifactId = "polished",
 						artifactDigest = SECOND_DIGEST,
-						origin = "derived" :: Generate.DerivationOrigin,
+						origin = "derived",
 						parents = { { artifactId = "candidate", artifactDigest = CANDIDATE_DIGEST } },
 						attempt = 2,
 						rights = KNOWN_RIGHTS,
@@ -1043,7 +1096,7 @@ describe("Generate execution", function()
 	end)
 
 	it("blocks publication and promotion when required history is unknown", function()
-		local value = brief { requiredRightsFacts = { "license", "owner" } :: { Generate.RightsFactName } }
+		local value = brief { requiredRightsFacts = { "license", "owner" } }
 		local plan = Generate.plan(value, REVIEW_STAGES)
 		local draft = packetDraft(1, "candidate", CANDIDATE_DIGEST, "front-view", EVIDENCE_DIGEST, "producer")
 		local packet = bind(value, plan, "review", draft)
@@ -1056,7 +1109,7 @@ describe("Generate execution", function()
 					{
 						artifactId = "candidate",
 						artifactDigest = CANDIDATE_DIGEST,
-						origin = "imported" :: Generate.DerivationOrigin,
+						origin = "imported",
 						parents = { { receiptId = "legacy/import-ledger" } },
 					},
 				},
@@ -1204,7 +1257,8 @@ describe("Generate execution", function()
 		local packet = bind(value, plan, "review", draft)
 		local outcomes = reviewOutcomes({ reviewDraft(packet, "reviewer-a") }, draft)
 		outcomes.publish = { status = "returned", output = { rollbackToken = "asset-version:1" } }
-		outcomes.readback = { status = "faulted", detail = "readback failed" }
+		local readback: Generate.StageOutcome = { status = "faulted", detail = "readback failed" }
+		outcomes.readback = readback
 		local trace: { string } = {}
 		local receipt = Generate.execute(
 			value,
@@ -1298,267 +1352,14 @@ describe("Generate execution", function()
 	end)
 end)
 
-describe("quota evaluation", function()
-	local function draft(value: number, kind: string?): Generate.QuotaDraft
-		return {
-			subject = "fixture.module",
-			quotas = {
-				{ name = "triangles", value = value, quota = 4000 },
-				{ name = "textures", value = 1, quota = 2 },
-			},
-			kind = if kind ~= nil then { name = "collision", kind = kind, allowedKinds = { "box", "hull" } } else nil,
-		}
-	end
-
-	it("reports a subject within every declared quota", function()
-		local report = Generate.evaluateQuota(draft(1200, "box"))
-		expect(report.status):toEqual "within"
-		expect(report.overruns):toEqual {}
-		expect(report.subject):toEqual "fixture.module"
-		expect((report.kind :: Generate.QuotaKindOutcome).allowed):toEqual(true)
-	end)
-
-	it("counts a value exactly equal to its quota as within quota", function()
-		local report = Generate.evaluateQuota(draft(4000, "box"))
-		expect(report.status):toEqual "within"
-		expect(report.outcomes[1].over):toEqual(false)
-	end)
-
-	it("names every measure over its quota, sorted, and never guesses a cause", function()
-		local report = Generate.evaluateQuota {
-			subject = "fixture.module",
-			quotas = {
-				{ name = "triangles", value = 9000, quota = 4000 },
-				{ name = "textures", value = 5, quota = 2 },
-			},
-		}
-		expect(report.status):toEqual "over"
-		expect(report.overruns):toEqual { "textures", "triangles" }
-		expect(report.kind):toBeNil()
-	end)
-
-	it("refuses an enumerated kind that is absent from its allowlist", function()
-		local report = Generate.evaluateQuota(draft(500, "precise-decomposition"))
-		expect(report.status):toEqual "over"
-		expect((report.kind :: Generate.QuotaKindOutcome).allowed):toEqual(false)
-		expect(report.overruns):toEqual { "collision:precise-decomposition" }
-	end)
-
-	it("compares a measure at its ceiling and a kind against its allowed list", function()
-		local function over(value: number): boolean
-			return Generate.evaluateQuota({
-				subject = "fixture",
-				quotas = { { name = "triangles", value = value, quota = 10 } },
-			}).status == "over"
-		end
-		expect(over(10)):toEqual(false)
-		expect(over(11)):toEqual(true)
-		local function allowed(kind: string, kinds: { string }): boolean
-			return (Generate.evaluateQuota({
-				subject = "fixture",
-				quotas = {},
-				kind = { name = "collision", kind = kind, allowedKinds = kinds },
-			}).kind :: Generate.QuotaKindOutcome).allowed
-		end
-		expect(allowed("box", { "box", "hull" })):toEqual(true)
-		expect(function()
-			allowed("box", {})
-		end):toThrow "allows no value"
-	end)
-
-	it("refuses a declaration it cannot evaluate rather than reporting a verdict", function()
-		expect(function()
-			Generate.evaluateQuota { subject = "", quotas = { { name = "triangles", value = 1, quota = 2 } } }
-		end):toThrow()
-		expect(function()
-			Generate.evaluateQuota { subject = "fixture.module", quotas = {} }
-		end):toThrow()
-		expect(function()
-			Generate.evaluateQuota {
-				subject = "fixture.module",
-				quotas = {
-					{ name = "triangles", value = 1, quota = 2 },
-					{ name = "triangles", value = 1, quota = 3 },
-				},
-			}
-		end):toThrow()
-		expect(function()
-			Generate.evaluateQuota {
-				subject = "fixture.module",
-				quotas = { { name = "triangles", value = 1, quota = -1 } },
-			}
-		end):toThrow()
-		expect(function()
-			Generate.evaluateQuota {
-				subject = "fixture.module",
-				quotas = {},
-				kind = { name = "collision", kind = "box", allowedKinds = {} },
-			}
-		end):toThrow()
-	end)
-end)
-
-describe("evidence bracket", function()
-	local function bracket(): Generate.EvidenceBracket
-		return Generate.evidenceBracket {
-			id = "fixture.bracket",
-			poses = {
-				{ id = "front", evidenceId = "01-front", parameters = { azimuth = 0 } :: { [string]: unknown } },
-				{ id = "side", evidenceId = "02-side", parameters = { azimuth = 90 } :: { [string]: unknown } },
-				{ id = "rear", evidenceId = "03-rear", parameters = { azimuth = 180 } :: { [string]: unknown } },
-			},
-		}
-	end
-
-	local function captures(): { Generate.EvidenceCapture }
-		return {
-			{ pose = "front", digest = "aa" },
-			{ pose = "side", digest = "bb" },
-			{ pose = "rear", digest = "cc" },
-		}
-	end
-
-	it("plans an ordered bracket and keeps consumer parameters opaque", function()
-		local planned = bracket()
-		expect(planned.schemaVersion):toEqual(1)
-		expect(#planned.poses):toEqual(3)
-		expect(planned.poses[2].index):toEqual(2)
-		expect(planned.poses[2].evidenceId):toEqual "02-side"
-		expect(planned.poses[2].parameters.azimuth :: number):toEqual(90)
-		expect((Bracket.poseFor(planned, "03-rear") :: Generate.EvidencePose).id):toEqual "rear"
-		expect(Bracket.poseFor(planned, "primary-angle")):toBeNil()
-	end)
-
-	it("binds a complete in-order bracket into an ordered evidence manifest", function()
-		local report = Generate.bindEvidence(bracket(), captures())
-		expect(report.status):toEqual "bound"
-		expect(report.reasons):toEqual {}
-		expect(report.ordered):toEqual { "front:aa", "side:bb", "rear:cc" }
-		local rows = Generate.evidenceManifest(report)
-		expect(#rows):toEqual(3)
-		expect(rows[1].evidenceId):toEqual "01-front"
-		expect(rows[3].pose):toEqual "rear"
-	end)
-
-	it("accepts a capture named by its evidence id as readily as by its pose id", function()
-		local report = Generate.bindEvidence(bracket(), {
-			{ pose = "01-front", digest = "aa" },
-			{ pose = "02-side", digest = "bb" },
-			{ pose = "03-rear", digest = "cc" },
-		})
-		expect(report.status):toEqual "bound"
-		expect(report.entries[1].pose):toEqual "front"
-	end)
-
-	it("refuses a short bracket and names every pose it never saw", function()
-		local short = { captures()[1], captures()[2] }
-		local report = Generate.bindEvidence(bracket(), short)
-		expect(report.status):toEqual "refused"
-		expect(report.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.SHORT)
-		expect(report.reasons[1]):toEqual "bracket fixture.bracket was offered 2 of its 3 poses and is missing rear"
-		expect(report.entries):toEqual {}
-		expect(function()
-			Generate.evidenceManifest(report)
-		end):toThrow()
-	end)
-
-	it("refuses an empty bracket rather than reporting an empty manifest", function()
-		local report = Generate.bindEvidence(bracket(), {})
-		expect(report.status):toEqual "refused"
-		expect(report.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.EMPTY)
-	end)
-
-	it("refuses a reordered bracket at the exact position that drifted", function()
-		local reordered = captures()
-		reordered[1], reordered[2] = reordered[2], reordered[1]
-		local report = Generate.bindEvidence(bracket(), reordered)
-		expect(report.status):toEqual "refused"
-		expect(report.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.OUT_OF_ORDER)
-		expect(report.faults[1].index):toEqual(1)
-		expect(report.faults[1].pose):toEqual "side"
-	end)
-
-	it("refuses a duplicated pose, an undeclared pose, and a pose that never posed", function()
-		local twice = Generate.bindEvidence(bracket(), {
-			{ pose = "front", digest = "aa" },
-			{ pose = "front", digest = "aa" },
-			{ pose = "rear", digest = "cc" },
-		})
-		expect(twice.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.DUPLICATE)
-
-		local unknown = Generate.bindEvidence(bracket(), {
-			{ pose = "primary-angle", digest = "aa" },
-			{ pose = "side", digest = "bb" },
-			{ pose = "rear", digest = "cc" },
-		})
-		expect(unknown.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.UNKNOWN)
-
-		local held = captures()
-		held[2] = { pose = "side", digest = "bb", posed = false }
-		local unposed = Generate.bindEvidence(bracket(), held)
-		expect(unposed.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.UNPOSED)
-		expect(unposed.status):toEqual "refused"
-	end)
-
-	it("holds the consumer to the digest requirement it declared", function()
-		local undigested = captures()
-		undigested[3] = { pose = "rear" }
-		local missing = Generate.bindEvidence(bracket(), undigested)
-		expect(missing.faults[1].reason):toEqual(Generate.EVIDENCE_BRACKET_REASONS.MISSING_DIGEST)
-
-		local order = Generate.bindEvidence(bracket(), {
-			{ pose = "front", posed = true },
-			{ pose = "side", posed = true },
-			{ pose = "rear", posed = true },
-		}, "absent")
-		expect(order.status):toEqual "bound"
-		expect(order.ordered):toEqual { "front", "side", "rear" }
-		expect(Generate.bindEvidence(bracket(), captures(), "absent").faults[1].reason):toEqual(
-			Generate.EVIDENCE_BRACKET_REASONS.UNEXPECTED_DIGEST
-		)
-	end)
-
-	it("refuses a bracket declaration it cannot plan rather than repairing it", function()
-		expect(function()
-			Generate.evidenceBracket { id = "", poses = { { id = "front", evidenceId = "01-front" } } }
-		end):toThrow()
-		expect(function()
-			Generate.evidenceBracket { id = "fixture.bracket", poses = {} }
-		end):toThrow()
-		expect(function()
-			Generate.evidenceBracket { id = "fixture.bracket", poses = { { id = "", evidenceId = "01-front" } } }
-		end):toThrow()
-		expect(function()
-			Generate.evidenceBracket { id = "fixture.bracket", poses = { { id = "front", evidenceId = "" } } }
-		end):toThrow()
-		expect(function()
-			Generate.evidenceBracket {
-				id = "fixture.bracket",
-				poses = {
-					{ id = "front", evidenceId = "01-front" },
-					{ id = "front", evidenceId = "02-front" },
-				},
-			}
-		end):toThrow()
-		expect(function()
-			Generate.evidenceBracket {
-				id = "fixture.bracket",
-				poses = {
-					{ id = "front", evidenceId = "01-front" },
-					{ id = "side", evidenceId = "front" },
-				},
-			}
-		end):toThrow()
-	end)
-end)
-
-describe("delivery destination and publication records", function()
+describe("delivery destinations", function()
 	local FIXTURE_DESTINATION: Generate.Destination = {
 		adapter = "fixture-host",
 		descriptor = { owner = { kind = "team", id = "42" }, kindName = "Image" },
 	}
 
 	local function destinationBrief(destination: unknown, hostVerification: unknown): Generate.Brief
+		local normalized, verification = Destination.normalize(destination, hostVerification)
 		return Generate.brief {
 			id = "fixture.icon.v1",
 			kind = "image",
@@ -1567,48 +1368,10 @@ describe("delivery destination and publication records", function()
 			delivery = {
 				semanticId = "fixture.icon",
 				target = "fixture-host",
-				destination = destination :: Generate.Destination?,
-				hostVerification = hostVerification :: boolean?,
+				destination = normalized,
+				hostVerification = verification,
 			},
 		}
-	end
-
-	local function receiptOf(status: Generate.ReceiptStatus?): Generate.Receipt
-		local value = brief()
-		local plan = Generate.plan(value, { { id = "make", operation = "generate" } })
-		local receipt = Generate.execute(value, plan, Host.fake.create(), AUTHORITY)
-		if status == nil then
-			return receipt
-		end
-		local forced = table.clone(receipt)
-		forced.status = status
-		forced.fingerprint = Generate.receiptFingerprint(forced)
-		return forced
-	end
-
-	local REMOVE: unknown = {}
-
-	local function record(overrides: { [string]: unknown }): Generate.PublicationRecord
-		local base: { [string]: unknown } = {
-			schemaVersion = 1,
-			disposition = "unaccepted",
-			state = "stopped",
-			detail = "the run resolved produced, not accepted",
-			dryRun = false,
-			quarantined = true,
-			placeholder = false,
-			credential = { name = "FIXTURE_PUBLISH_KEY", exposed = false },
-			attemptsAuthorised = 1,
-			attemptsMade = 0,
-			attempts = {},
-			compensations = {},
-			stages = { { id = "acceptance", status = "refused", detail = "produced" } },
-			facts = {},
-		}
-		for key, value in overrides do
-			base[key] = if value == REMOVE then nil else value
-		end
-		return (base :: unknown) :: Generate.PublicationRecord
 	end
 
 	it("declares a destination as opaque adapter data and host verification as a flag", function()
@@ -1644,465 +1407,6 @@ describe("delivery destination and publication records", function()
 			destinationBrief({ adapter = "fixture-host", descriptor = { apiKey = "smuggled" } }, nil)
 		end):toThrow "secret-shaped"
 	end)
-
-	it("attaches one publication record to an unchanged receipt and re-fingerprints it", function()
-		local receipt = receiptOf()
-		local value = record {}
-		local attached = Generate.attachPublication(receipt, value)
-		expect(attached.publication):toEqual(value)
-		expect(attached.fingerprint):toEqual(Generate.receiptFingerprint(attached))
-		expect(attached.fingerprint).never:toEqual(receipt.fingerprint)
-		expect(receipt.publication):toEqual(nil)
-		expect(function()
-			Generate.attachPublication(attached, value)
-		end):toThrow "already records"
-
-		local changed = table.clone(receipt)
-		changed.limitations = { "edited" }
-		expect(function()
-			Generate.attachPublication(changed, value)
-		end):toThrow "unchanged receipt"
-
-		expect(function()
-			Generate.attachPublication(
-				receipt,
-				record { credential = { name = "FIXTURE_PUBLISH_KEY", exposed = true } }
-			)
-		end):toThrow "no credential value was exposed"
-		expect(function()
-			Generate.attachPublication(receipt, record { quarantined = false })
-		end):toThrow "quarantined"
-		expect(function()
-			Generate.attachPublication(receipt, record { placeholder = REMOVE })
-		end):toThrow "placeholder"
-		expect(function()
-			Generate.attachPublication(receipt, record { state = REMOVE })
-		end):toThrow "pending, confirmed, reconciled or stopped"
-		expect(function()
-			Generate.attachPublication(receipt, record { state = "terminal" })
-		end):toThrow "pending, confirmed, reconciled or stopped"
-		expect(function()
-			Generate.attachPublication(receipt, record { facts = REMOVE })
-		end):toThrow "adapter facts"
-		expect(function()
-			Generate.attachPublication(receipt, record { artifactDigest = "ABC" })
-		end):toThrow "artifact digest"
-		expect(function()
-			Generate.attachPublication(receipt, record { attemptsMade = 2 })
-		end):toThrow "attempts made"
-		expect(function()
-			Generate.attachPublication(receipt, record { readback = { apiKey = "leak" } })
-		end):toThrow "secret-shaped"
-		expect(function()
-			Generate.attachPublication(receipt, record { facts = { token = "leak" } })
-		end):toThrow "secret-shaped"
-		expect(Generate.publicationFault(record {})):toEqual(nil)
-		expect(Generate.publicationFault(record { disposition = "" })):toEqual "publication record must name one disposition"
-
-		local rehearsed = Generate.attachPublication(receipt, record { disposition = "dry-run", dryRun = true })
-		local final = Generate.attachPublication(rehearsed, value)
-		expect((final.publication :: Generate.PublicationRecord).dryRun):toEqual(false)
-	end)
-
-	it("confirms a pending publication record, and refuses a settled one", function()
-		local receipt = receiptOf()
-		local pending = record {
-			disposition = "moderation-pending",
-			state = "pending",
-			detail = "content 999000111 remains in review",
-			contentId = "999000111",
-			attemptsMade = 1,
-			stages = { { id = "spend", status = "refused", detail = "moderation-pending" } },
-		}
-		local attached = Generate.attachPublication(receipt, pending)
-		expect(function()
-			Generate.confirmPublication(receipt, pending)
-		end):toThrow "pending or reconciled"
-		local confirmed = Generate.confirmPublication(
-			attached,
-			record {
-				disposition = "published",
-				state = "confirmed",
-				detail = pending.detail,
-				contentId = "999000111",
-				version = "1",
-				attemptsMade = 1,
-				stages = pending.stages,
-			}
-		)
-		expect((confirmed.publication :: Generate.PublicationRecord).state):toEqual "confirmed"
-		expect(confirmed.fingerprint):toEqual(Generate.receiptFingerprint(confirmed))
-		expect(confirmed.fingerprint).never:toEqual(attached.fingerprint)
-		expect(function()
-			Generate.confirmPublication(confirmed, pending)
-		end):toThrow "pending or reconciled"
-		expect(function()
-			Generate.confirmPublication(Generate.attachPublication(receipt, record {}), pending)
-		end):toThrow "pending or reconciled"
-	end)
-
-	it("reconciles only a stopped failed-readback create with a failed compensation", function()
-		local receipt = receiptOf()
-		local failedAttempt: Generate.PublicationAttempt = {
-			ordinal = 1,
-			stageId = "spend",
-			grantId = "grant-1",
-			grantFingerprint = "grant-fp",
-			action = "create",
-			semanticId = "fixture.icon",
-			state = "failed-readback",
-		}
-		local stopped = record {
-			disposition = "failed-compensation",
-			state = "stopped",
-			attemptsMade = 1,
-			attempts = { failedAttempt },
-			compensations = {
-				{ ordinal = 1, stageId = "spend", rollbackToken = "token-1", status = "failed", detail = "denied" },
-			},
-		}
-		local attached = Generate.attachPublication(receipt, stopped)
-		local function reconciled(overrides: { [string]: unknown }): Generate.PublicationRecord
-			local base: { [string]: unknown } = {
-				disposition = "access-pending",
-				state = "reconciled",
-				attemptsMade = 1,
-				attempts = stopped.attempts,
-				compensations = stopped.compensations,
-				version = "3",
-				readback = { creator = "fixture" },
-				reconciliation = {
-					sourceReceiptFingerprint = attached.fingerprint,
-					evidencePath = "evidence/readback.json",
-					evidenceDigest = string.rep("e", 64),
-				},
-			}
-			for key, value in overrides do
-				base[key] = value
-			end
-			return record(base)
-		end
-		local settled = Generate.reconcilePublication(attached, reconciled {})
-		expect((settled.publication :: Generate.PublicationRecord).state):toEqual "reconciled"
-		local finished = Generate.confirmPublication(
-			settled,
-			record {
-				disposition = "published",
-				state = "confirmed",
-				attemptsMade = 1,
-				attempts = stopped.attempts,
-				compensations = stopped.compensations,
-				version = "3",
-				readback = { creator = "fixture" },
-				reconciliation = (settled.publication :: Generate.PublicationRecord).reconciliation,
-			}
-		)
-		expect((finished.publication :: Generate.PublicationRecord).state):toEqual "confirmed"
-
-		expect(function()
-			Generate.reconcilePublication(receipt, reconciled {})
-		end):toThrow "stopped publication record"
-		expect(function()
-			Generate.reconcilePublication(attached, reconciled { state = "pending" })
-		end):toThrow "bound to the original receipt"
-		expect(function()
-			Generate.reconcilePublication(
-				attached,
-				reconciled {
-					reconciliation = {
-						sourceReceiptFingerprint = "other",
-						evidencePath = "evidence/readback.json",
-						evidenceDigest = string.rep("e", 64),
-					},
-				}
-			)
-		end):toThrow "bound to the original receipt"
-		expect(function()
-			Generate.reconcilePublication(attached, reconciled { attempts = {}, attemptsMade = 0 })
-		end):toThrow "preserve the original attempts"
-		expect(function()
-			Generate.reconcilePublication(attached, reconciled { version = REMOVE })
-		end):toThrow "bound to the original receipt"
-		local plain = Generate.attachPublication(receipt, record {})
-		expect(function()
-			Generate.reconcilePublication(
-				plain,
-				reconciled {
-					reconciliation = {
-						sourceReceiptFingerprint = plain.fingerprint,
-						evidencePath = "evidence/readback.json",
-						evidenceDigest = string.rep("e", 64),
-					},
-				}
-			)
-		end):toThrow "failed-readback create"
-		expect(function()
-			Generate.attachPublication(receipt, reconciled { reconciliation = REMOVE })
-		end):toThrow "reconciliation evidence"
-	end)
-
-	local function sourceFingerprint(receipt: Generate.Receipt): string
-		local source = table.clone(receipt)
-		source.publication = nil
-		return Generate.receiptFingerprint(source)
-	end
-
-	local function request(source: Generate.Receipt, hostBuild: string): Generate.HostVerificationRequest
-		local payload: Generate.HostVerificationRequestPayload = {
-			schemaVersion = 1,
-			receiptId = source.id,
-			sourceReceiptFingerprint = sourceFingerprint(source),
-			briefFingerprint = source.briefFingerprint,
-			artifactId = "candidate",
-			artifactDigest = CANDIDATE_DIGEST,
-			contentId = "999000111",
-			version = "1",
-			grantId = "grant-1",
-			grantFingerprint = "grant-fp",
-			writeAheadDigest = SECOND_DIGEST,
-			stateFingerprint = "state-1",
-			host = "fixture-host 1.0",
-			hostBuild = hostBuild,
-			windowSeconds = 5,
-			binding = { scope = "fixture" },
-		}
-		local result = table.clone(payload) :: Generate.HostVerificationRequest
-		result.fingerprint = Generate.fingerprint(payload)
-		return result
-	end
-
-	local function verification(hostBuild: string, disposition: ("verified" | "refused")?): Generate.HostVerification
-		local refused = disposition == "refused"
-		return {
-			schemaVersion = 1,
-			requested = true,
-			disposition = disposition or "verified",
-			refusalReason = if refused then "load_failed" else nil,
-			detail = if refused then "the host did not load the content" else nil,
-			contentId = "999000111",
-			hostBuild = hostBuild,
-			windowSeconds = 5,
-			measurements = { loaded = true },
-			diagnostics = {},
-			captureRef = "frame://999000111",
-			observationFingerprint = if refused then nil else string.rep("f", 32),
-		}
-	end
-
-	local function published(overrides: { [string]: unknown }): Generate.PublicationRecord
-		local base: { [string]: unknown } = {
-			disposition = "published",
-			state = "confirmed",
-			detail = nil,
-			contentId = "999000111",
-			attemptsMade = 1,
-			stages = { { id = "host-verification", status = "not-run", detail = "the brief does not request it" } },
-		}
-		for key, value in overrides do
-			base[key] = value
-		end
-		return record(base)
-	end
-
-	it("reports host verification only for an exact accepted confirmed record", function()
-		local receipt = receiptOf "accepted"
-		local base = published {}
-		local unverified = Generate.attachPublication(receipt, base)
-		expect(Generate.hostVerified(unverified)):toEqual(false)
-		expect(Generate.hostVerified(({ publication = nil } :: unknown) :: Generate.Receipt)):toEqual(false)
-
-		local verified = published { verification = verification "build-1" }
-		local attached = Generate.attachPublication(receipt, verified)
-		expect(Generate.hostVerified(attached)):toEqual(true)
-
-		for _, other in { receiptOf "produced", receiptOf "rejected", receiptOf "failed" } do
-			expect(Generate.hostVerified(Generate.attachPublication(other, verified))):toEqual(false)
-		end
-
-		local tampered = Generate.attachPublication(receipt, verified)
-		local observation = (tampered.publication :: Generate.PublicationRecord).verification :: Generate.HostVerification
-		observation.observationFingerprint = "changed-observation"
-		expect(Generate.hostVerified(tampered)):toEqual(false)
-
-		local changedHost = table.clone(attached)
-		changedHost.host = "changed-host"
-		expect(Generate.hostVerified(changedHost)):toEqual(false)
-		local changedContent = table.clone(attached)
-		changedContent.publication = published { verification = verification "build-1", contentId = "999000112" }
-		expect(Generate.hostVerified(changedContent)):toEqual(false)
-
-		for _, state in { "pending", "stopped" } do
-			expect(
-				Generate.hostVerified(
-					Generate.attachPublication(
-						receipt,
-						published { verification = verification "build-1", state = state }
-					)
-				)
-			):toEqual(false)
-		end
-		for _, field in { "dryRun", "placeholder" } do
-			expect(
-				Generate.hostVerified(
-					Generate.attachPublication(
-						receipt,
-						published { verification = verification "build-1", [field] = true }
-					)
-				)
-			):toEqual(false)
-		end
-		expect(
-			Generate.hostVerified(
-				Generate.attachPublication(
-					receipt,
-					published { verification = verification "build-1", contentId = REMOVE }
-				)
-			)
-		):toEqual(false)
-		expect(
-			Generate.hostVerified(
-				Generate.attachPublication(
-					receipt,
-					published { verification = verification "build-1", contentId = "999000112" }
-				)
-			)
-		):toEqual(false)
-
-		local refused =
-			Generate.attachPublication(receipt, published { verification = verification("build-1", "refused") })
-		expect(Generate.hostVerified(refused)):toEqual(false)
-		local unnamed = verification("build-1", "refused")
-		unnamed.refusalReason = nil
-		expect(function()
-			Generate.attachPublication(receipt, published { verification = unnamed })
-		end):toThrow "refusal reason"
-		local unfingerprinted = verification "build-1"
-		unfingerprinted.observationFingerprint = nil
-		expect(function()
-			Generate.attachPublication(receipt, published { verification = unfingerprinted })
-		end):toThrow "observation fingerprint"
-		local unbuilt = verification "build-1"
-		unbuilt.hostBuild = ""
-		expect(function()
-			Generate.attachPublication(receipt, published { verification = unbuilt })
-		end):toThrow "host build"
-		local unwindowed = verification "build-1"
-		unwindowed.windowSeconds = 0
-		expect(function()
-			Generate.attachPublication(receipt, published { verification = unwindowed })
-		end):toThrow "observation window"
-		local undiagnosed = (verification "build-1" :: unknown) :: { [string]: unknown }
-		undiagnosed.diagnostics = nil
-		expect(function()
-			Generate.attachPublication(receipt, published { verification = undiagnosed })
-		end):toThrow "diagnostics"
-	end)
-
-	it("completes and rebinds a deferred host verification request", function()
-		local receipt = receiptOf "accepted"
-		local deferred = request(receipt, "build-1")
-		local pendingRecord = record {
-			disposition = "verification-pending",
-			state = "pending",
-			contentId = "999000111",
-			version = "1",
-			artifactId = "candidate",
-			artifactDigest = CANDIDATE_DIGEST,
-			grantId = "grant-1",
-			grantFingerprint = "grant-fp",
-			writeAheadDigest = SECOND_DIGEST,
-			attemptsMade = 1,
-			verificationRequest = deferred,
-		}
-		local pending = Generate.attachPublication(receipt, pendingRecord)
-		expect(Generate.hostVerified(pending)):toEqual(false)
-
-		local function completion(requestValue: Generate.HostVerificationRequest): Generate.HostVerificationCompletion
-			return {
-				requestFingerprint = requestValue.fingerprint,
-				pendingReceiptFingerprint = pending.fingerprint,
-				evidencePath = "evidence/verification.json",
-				evidenceDigest = string.rep("d", 64),
-				stateFingerprint = "state-1",
-			}
-		end
-		local function completed(build: string, disposition: ("verified" | "refused")?): Generate.PublicationRecord
-			local observed = verification(build, disposition)
-			local stages = table.clone(pendingRecord.stages)
-			table.insert(stages, {
-				id = "complete-host-verification",
-				status = if observed.disposition == "verified" then "passed" else "refused",
-				detail = observed.detail,
-			})
-			return record {
-				disposition = "published",
-				state = "confirmed",
-				detail = if observed.detail == nil then REMOVE else observed.detail,
-				contentId = "999000111",
-				version = "1",
-				artifactId = "candidate",
-				artifactDigest = CANDIDATE_DIGEST,
-				grantId = "grant-1",
-				grantFingerprint = "grant-fp",
-				writeAheadDigest = SECOND_DIGEST,
-				attemptsMade = 1,
-				stages = stages,
-				verificationRequest = deferred,
-				verification = observed,
-				verificationCompletion = completion(deferred),
-			}
-		end
-		local done = Generate.confirmPublication(pending, completed "build-1")
-		expect(Generate.hostVerified(done)):toEqual(true)
-		expect(Generate.hostVerified(Generate.confirmPublication(pending, completed("build-1", "refused")))):toEqual(
-			false
-		)
-		expect(function()
-			Generate.confirmPublication(pending, completed "build-2")
-		end):toThrow "host build of its request"
-		local missing = completed "build-1"
-		missing.verificationCompletion = nil
-		expect(function()
-			Generate.confirmPublication(pending, missing)
-		end):toThrow "bound to the pending verification request"
-
-		local rebound = request(receipt, "build-2")
-		local rebinding = table.clone(pendingRecord)
-		rebinding.verificationRequest = rebound
-		rebinding.verificationRebindings = {
-			{
-				receiptFingerprint = pending.fingerprint,
-				requestFingerprint = deferred.fingerprint,
-				hostBuild = "build-1",
-			},
-		}
-		local reboundReceipt = Generate.confirmPublication(pending, rebinding)
-		expect((reboundReceipt.publication :: Generate.PublicationRecord).verificationRequest):toEqual(rebound)
-		expect(function()
-			Generate.confirmPublication(pending, pendingRecord)
-		end):toThrow "bound to the pending verification request"
-		local same = table.clone(rebinding)
-		same.verificationRequest = deferred
-		expect(function()
-			Generate.confirmPublication(pending, same)
-		end):toThrow "different build"
-		local forged = table.clone(rebinding)
-		forged.detail = "forged"
-		expect(function()
-			Generate.confirmPublication(pending, forged)
-		end):toThrow "protected request field"
-
-		local tamperedRequest = table.clone(deferred)
-		tamperedRequest.windowSeconds = 9
-		expect(function()
-			Generate.attachPublication(receipt, record { verificationRequest = tamperedRequest })
-		end):toThrow "fingerprint changed"
-		local foreign = table.clone(pendingRecord)
-		foreign.contentId = "999000112"
-		expect(function()
-			Generate.attachPublication(receipt, foreign)
-		end):toThrow "exact publication identity"
-	end)
 end)
 
 describe("Generate candidate revision bookkeeping", function()
@@ -2112,7 +1416,7 @@ describe("Generate candidate revision bookkeeping", function()
 			local draft: Generate.RevisionEntryDraft = {
 				revision = index,
 				producer = "fixture-author",
-				outcome = outcome :: Generate.RevisionOutcome,
+				outcome = outcome,
 			}
 			table.insert(entries, draft)
 		end
@@ -2139,7 +1443,9 @@ describe("Generate candidate revision bookkeeping", function()
 
 		local history: { Generate.RevisionEntryDraft } = {}
 		for revision = 1, 5 do
-			table.insert(history, { revision = revision, producer = "fixture-author", outcome = "rejected" })
+			local item: Generate.RevisionEntryDraft =
+				{ revision = revision, producer = "fixture-author", outcome = "rejected" }
+			table.insert(history, item)
 		end
 		table.insert(history, entry)
 		local current = Generate.revisionLedger("fixture.wall.candidate", history)
@@ -2198,15 +1504,11 @@ describe("Generate candidate revision bookkeeping", function()
 			})
 		end):toThrow "only the head may be open"
 
-		expect(function()
-			Generate.revisionLedger("fixture.wall.candidate", {
-				{
-					revision = 1,
-					producer = "fixture-author",
-					outcome = ("withdrawn" :: unknown) :: Generate.RevisionOutcome,
-				},
-			})
-		end):toThrow "outcome must be open"
+		local ok, why = protected(Generate.revisionLedger, "fixture.wall.candidate", {
+			{ revision = 1, producer = "fixture-author", outcome = "withdrawn" },
+		})
+		expect(ok):toEqual(false)
+		expect(tostring(why)):toContain "outcome must be open"
 
 		expect(function()
 			Generate.rollCandidate(ledgerOf { "approved" }, {
@@ -2248,9 +1550,9 @@ describe("Generate candidate revision bookkeeping", function()
 			})
 		end):toThrow "lowercase SHA-256 digest"
 
-		expect(function()
-			Revision.outcomeFor(({ disposition = "invented" } :: unknown) :: Generate.ResolvedReview)
-		end):toThrow "review disposition"
+		local resolved, refusal = protected(Revision.outcomeFor, { disposition = "invented" })
+		expect(resolved):toEqual(false)
+		expect(tostring(refusal)):toContain "review disposition"
 	end)
 end)
 
@@ -2278,8 +1580,8 @@ describe("Generate economics", function()
 			},
 			AUTHORITY
 		)
-		local economics = receipt.stages[1].economics :: Generate.StageEconomics
-		local providerCalls = economics.providerCalls :: { Generate.ProviderCallEconomics }
+		local economics = assert(receipt.stages[1].economics)
+		local providerCalls = assert(economics.providerCalls)
 		expect(economics.attemptCount):toEqual(1)
 		expect(providerCalls[1].count):toEqual(2)
 		expect(providerCalls[1].costMicros):toEqual(500)
@@ -2291,7 +1593,7 @@ describe("Generate economics", function()
 		local value = brief()
 		local plan = Generate.plan(value, { { id = "make", operation = "generate" } })
 		local receipt = Generate.execute(value, plan, Host.fake.create(), AUTHORITY)
-		local economics = receipt.stages[1].economics :: Generate.StageEconomics
+		local economics = assert(receipt.stages[1].economics)
 		expect(economics.wallSeconds):toEqual(0.001)
 		expect(economics.attemptCount):toBeNil()
 	end)

@@ -6,52 +6,75 @@ local function sortedStrings(values: { string }): { string }
 	return copy
 end
 
-local function copy(value: unknown): unknown
+local function copy<T>(value: T): T
 	local visiting: { [unknown]: boolean } = {}
 	local function clone(current: unknown): unknown
 		if type(current) ~= "table" then
 			return current
 		end
-		local source = current :: { [unknown]: unknown }
-		if visiting[source] then
+		if getmetatable(current) ~= nil then
+			error("Generate canonical copies require plain tables", 3)
+		end
+		if visiting[current] then
 			error("Generate canonical values may not contain cycles", 3)
 		end
-		visiting[source] = true
+		visiting[current] = true
 		local result: { [unknown]: unknown } = {}
-		for key, nested in source do
+		for key, nested in current do
 			result[key] = clone(nested)
 		end
-		visiting[source] = nil
+		visiting[current] = nil
 		return result
 	end
-	return clone(value)
+	local source: unknown = value
+	if type(source) ~= "table" then
+		return value
+	end
+	if getmetatable(source) ~= nil then
+		error("Generate canonical copies require plain tables", 3)
+	end
+	local result = table.clone(value)
+	visiting[source] = true
+	for key, nested in source do
+		rawset(result, key, clone(nested))
+	end
+	return result
+end
+
+local function fields(value: unknown): { [unknown]: unknown }
+	assert(type(value) == "table")
+	local result: { [unknown]: unknown } = {}
+	for key, nested in value do
+		result[key] = nested
+	end
+	return result
 end
 
 local function stableValue(value: unknown): string
 	local visiting: { [unknown]: boolean } = {}
 	local function encode(current: unknown): string
 		local kind = type(current)
-		if kind == "nil" then
+		if current == nil then
 			return "null"
-		elseif kind == "boolean" then
+		elseif type(current) == "boolean" then
 			return tostring(current)
-		elseif kind == "number" then
-			local number = current :: number
+		elseif type(current) == "number" then
+			local number = current
 			if number ~= number or number == math.huge or number == -math.huge then
 				error("Generate canonical numbers must be finite", 3)
 			end
 			return if number == 0 then "0" else tostring(number)
-		elseif kind == "string" then
-			return string.format("%q", current :: string)
-		elseif kind ~= "table" then
+		elseif type(current) == "string" then
+			return string.format("%q", current)
+		elseif type(current) ~= "table" then
 			error("Generate canonical values may contain only data, got " .. kind, 3)
 		end
 
-		local object = current :: { [unknown]: unknown }
-		if visiting[object] then
+		local object = fields(current)
+		if visiting[current] then
 			error("Generate canonical values may not contain cycles", 3)
 		end
-		visiting[object] = true
+		visiting[current] = true
 		local array = true
 		local count = 0
 		for key in object do
@@ -73,7 +96,7 @@ local function stableValue(value: unknown): string
 			for index = 1, count do
 				table.insert(pieces, encode(object[index]))
 			end
-			visiting[object] = nil
+			visiting[current] = nil
 			return "[" .. table.concat(pieces, ",") .. "]"
 		end
 
@@ -89,7 +112,7 @@ local function stableValue(value: unknown): string
 		for _, key in keys do
 			table.insert(pieces, string.format("%q", key) .. ":" .. encode(object[key]))
 		end
-		visiting[object] = nil
+		visiting[current] = nil
 		return "{" .. table.concat(pieces, ",") .. "}"
 	end
 	return encode(value)
@@ -100,7 +123,7 @@ local function fingerprint(value: unknown): string
 
 	local first, second, third, fourth = 2166136261, 2246822519, 3266489917, 668265263
 	for index = 1, #bytes do
-		local byte = string.byte(bytes, index) :: number
+		local byte = assert((string.byte(bytes, index)))
 		first = (first * 65599 + byte + 1) % 4294967296
 		second = (second * 131071 + byte + 2) % 4294967296
 		third = (third * 524287 + byte + 3) % 4294967296

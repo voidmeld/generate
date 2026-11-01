@@ -153,7 +153,9 @@ local function scanSource(path: string, source: string, rulesets: { Ruleset }?):
 	return findings
 end
 
+local RULESETS: { Ruleset } = { "roblox" }
+
 return {
-	RULESETS = { "roblox" } :: { Ruleset },
+	RULESETS = RULESETS,
 	scanSource = scanSource,
 }

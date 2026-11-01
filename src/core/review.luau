@@ -112,13 +112,14 @@ local function packet(draft: ReviewPacketDraft, binding: Types.PacketBinding): R
 			error(("Generate review packet repeats evidence artifact %q"):format(base.id), 2)
 		end
 		seenEvidence[base.id] = true
-		table.insert(evidence, {
+		local entry: EvidenceRef = {
 			id = base.id,
 			digest = base.digest,
 			digestAlgorithm = "sha256",
 			view = view,
 			role = role,
-		})
+		}
+		table.insert(evidence, entry)
 	end
 	if #evidence == 0 then
 		error("Generate review packet must bind at least one evidence artifact digest", 2)
@@ -136,7 +137,8 @@ local function packet(draft: ReviewPacketDraft, binding: Types.PacketBinding): R
 	if #views == 0 then
 		error("Generate review packet must name the requested canonical views", 2)
 	end
-	local capture: Types.StringMap = table.clone((draft.captureEnvironment or {}) :: Types.StringMap)
+	local environment: Types.StringMap = draft.captureEnvironment or {}
+	local capture = table.clone(environment)
 	Secret.validate(capture, "Generate review packet captureEnvironment")
 	if next(capture) == nil then
 		error("Generate review packet must record the capture environment it bound", 2)
@@ -168,6 +170,13 @@ local function packet(draft: ReviewPacketDraft, binding: Types.PacketBinding): R
 	return result
 end
 
+local function optionalFamily(value: string?, name: string): string?
+	if value ~= nil and value == "" then
+		error(("Generate review decision %s must be omitted or non-empty"):format(name), 3)
+	end
+	return value
+end
+
 local function decision(draft: ReviewDecisionDraft): ReviewDecision
 	if type(draft) ~= "table" then
 		error("Generate.reviewDecision expects a table", 2)
@@ -191,12 +200,8 @@ local function decision(draft: ReviewDecisionDraft): ReviewDecision
 	if draft.verdict ~= "approved" and #reasons == 0 then
 		error("Generate review decision must give at least one reason when it does not approve", 2)
 	end
-	if draft.modelFamily ~= nil and draft.modelFamily == "" then
-		error("Generate review decision modelFamily must be omitted or non-empty", 2)
-	end
-	if draft.providerFamily ~= nil and draft.providerFamily == "" then
-		error("Generate review decision providerFamily must be omitted or non-empty", 2)
-	end
+	local modelFamily = optionalFamily(draft.modelFamily, "modelFamily")
+	local providerFamily = optionalFamily(draft.providerFamily, "providerFamily")
 	if draft.score ~= nil and (type(draft.score) ~= "number" or draft.score < 0 or draft.score > 10) then
 		error("Generate review decision score must be omitted or a number between 0 and 10", 2)
 	end
@@ -219,8 +224,8 @@ local function decision(draft: ReviewDecisionDraft): ReviewDecision
 		role = nonempty(draft.role, "decision role", 3),
 		context = draft.context,
 		blind = draft.blind,
-		modelFamily = draft.modelFamily,
-		providerFamily = draft.providerFamily,
+		modelFamily = modelFamily,
+		providerFamily = providerFamily,
 		certainty = draft.certainty,
 		verdict = draft.verdict,
 		reasons = reasons,
@@ -232,47 +237,81 @@ local function decision(draft: ReviewDecisionDraft): ReviewDecision
 	return result
 end
 
+local function exclusion(value: ReviewDecision, reason: Types.ExclusionReason, detail: string): ExcludedDecision
+	return { packetId = value.packetId, actor = value.actor, reason = reason, detail = detail }
+end
+
 local function ineligibility(
 	value: ReviewDecision,
 	target: ReviewPacket,
 	contract: ReviewContract,
 	seenActor: { [string]: boolean }
-): (Types.ExclusionReason?, string?)
+): ExcludedDecision?
 	if value.packetId ~= target.id then
-		return "unknown-packet", ("decision names packet %q, review resolves %q"):format(value.packetId, target.id)
+		return exclusion(
+			value,
+			"unknown-packet",
+			("decision names packet %q, review resolves %q"):format(value.packetId, target.id)
+		)
 	end
 	if value.rubric.fingerprint ~= target.rubric.fingerprint or value.rubric.id ~= target.rubric.id then
-		return "rubric-drift",
+		return exclusion(
+			value,
+			"rubric-drift",
 			("reviewer judged rubric %q/%s, packet bound %q/%s"):format(
 				value.rubric.id,
 				value.rubric.fingerprint,
 				target.rubric.id,
 				target.rubric.fingerprint
 			)
+		)
 	end
 	if value.evidenceFingerprint ~= target.evidenceFingerprint then
-		return "evidence-drift", "reviewer judged evidence that is not the evidence bound by this packet"
+		return exclusion(
+			value,
+			"evidence-drift",
+			"reviewer judged evidence that is not the evidence bound by this packet"
+		)
 	end
 	if value.candidateFingerprint ~= target.candidate.fingerprint then
-		return "candidate-drift", "reviewer judged a candidate revision other than the one this packet binds"
+		return exclusion(
+			value,
+			"candidate-drift",
+			"reviewer judged a candidate revision other than the one this packet binds"
+		)
 	end
 	if value.packetFingerprint ~= target.fingerprint then
-		return "packet-drift", "decision does not bind this exact review packet"
+		return exclusion(value, "packet-drift", "decision does not bind this exact review packet")
 	end
 	if contract.independence == "required" and value.actor == target.candidate.producer then
-		return "producer-self-review", ("actor %q produced the candidate it reviewed"):format(value.actor)
+		return exclusion(
+			value,
+			"producer-self-review",
+			("actor %q produced the candidate it reviewed"):format(value.actor)
+		)
 	end
 	if seenActor[value.actor] then
-		return "duplicate-actor", ("actor %q already submitted a decision for this packet"):format(value.actor)
+		return exclusion(
+			value,
+			"duplicate-actor",
+			("actor %q already submitted a decision for this packet"):format(value.actor)
+		)
 	end
 	if contract.blindness == "required" and not value.blind then
-		return "blindness-required",
+		return exclusion(
+			value,
+			"blindness-required",
 			("reviewer %q reported without blindness the contract requires"):format(value.actor)
+		)
 	end
 	if contract.independence == "required" and value.context ~= "independent" then
-		return "independence-required", ("reviewer %q reported from a shared review context"):format(value.actor)
+		return exclusion(
+			value,
+			"independence-required",
+			("reviewer %q reported from a shared review context"):format(value.actor)
+		)
 	end
-	return nil, nil
+	return nil
 end
 
 local function resolve(
@@ -296,14 +335,9 @@ local function resolve(
 		if value.packetId == target.id then
 			submitted += 1
 		end
-		local reason, detail = ineligibility(value, target, contract, seenActor)
-		if reason ~= nil then
-			table.insert(excluded, {
-				packetId = value.packetId,
-				actor = value.actor,
-				reason = reason :: Types.ExclusionReason,
-				detail = detail :: string,
-			})
+		local excludedDecision = ineligibility(value, target, contract, seenActor)
+		if excludedDecision ~= nil then
+			table.insert(excluded, excludedDecision)
 			continue
 		end
 		seenActor[value.actor] = true

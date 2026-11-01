@@ -5,7 +5,6 @@ local Wire = require "./wire"
 type SendAuthorized = Wire.SendAuthorized
 type Decode = Wire.Decode
 type Encode = Wire.Encode
-type Response = Wire.Response
 
 export type Request = {
 	endpoint: string,
@@ -36,9 +35,11 @@ local function validUniverseId(value: unknown): boolean
 end
 
 local function validAssetId(value: unknown): boolean
-	return type(value) == "string"
-		and #(value :: string) <= MAX_ASSET_ID_DIGITS
-		and string.match(value :: string, "^[1-9][0-9]*$") ~= nil
+	if type(value) ~= "string" or #value > MAX_ASSET_ID_DIGITS or string.match(value, "^[1-9][0-9]*$") == nil then
+		return false
+	end
+	local numeric = tonumber(value)
+	return numeric ~= nil and numeric < MAX_SAFE_ASSET_ID and string.format("%.0f", numeric) == value
 end
 
 local function boundedBody(value: string): string
@@ -98,7 +99,7 @@ local function prepare(encode: Encode, universeId: number, assetIds: { string })
 	end
 	local requests: { { assetId: number, grantToDependencies: boolean } } = {}
 	for _, assetId in ordered do
-		table.insert(requests, { assetId = tonumber(assetId) :: number, grantToDependencies = false })
+		table.insert(requests, { assetId = assert(tonumber(assetId)), grantToDependencies = false })
 	end
 	local body = encode {
 		subjectType = "Universe",
@@ -108,7 +109,7 @@ local function prepare(encode: Encode, universeId: number, assetIds: { string })
 	}
 	return {
 		endpoint = ENDPOINT,
-		method = "PATCH" :: "PATCH",
+		method = "PATCH",
 		headerNames = table.clone(HEADER_NAMES),
 		body = body,
 		universeId = universeId,
@@ -123,7 +124,7 @@ local function confirmedAssetIds(value: unknown): { string }?
 	local observed: { string } = {}
 	local seen: { [string]: boolean } = {}
 	local counted = 0
-	for index, assetId in value :: { unknown } do
+	for index, assetId in value do
 		counted += 1
 		if
 			type(index) ~= "number"
@@ -143,7 +144,7 @@ local function confirmedAssetIds(value: unknown): { string }?
 		seen[canonical] = true
 		table.insert(observed, canonical)
 	end
-	if counted ~= #(value :: { unknown }) then
+	if counted ~= #value then
 		return nil
 	end
 	table.sort(observed)
@@ -161,16 +162,16 @@ local function refusal(status: number, diagnostic: string, body: string, observe
 end
 
 local function attempt(send: SendAuthorized, decode: Decode, prepared: Request): Result
-	local sent, answer = pcall(send, {
-		method = "PATCH" :: "PATCH",
+	local request: Wire.AuthorizedRequest = {
+		method = "PATCH",
 		url = prepared.endpoint,
 		headers = { Accept = "application/json", ["Content-Type"] = "application/json" },
 		body = prepared.body,
-	})
+	}
+	local sent, response = pcall(send, request)
 	if not sent then
-		return refusal(0, "the permission request did not resolve: " .. tostring(answer), "")
+		return refusal(0, "the permission request did not resolve: " .. tostring(response), "")
 	end
-	local response = answer :: Response
 	if type(response) ~= "table" or type(response.status) ~= "number" then
 		return refusal(0, "the transport returned no response this adapter can read", "")
 	end
@@ -181,16 +182,15 @@ local function attempt(send: SendAuthorized, decode: Decode, prepared: Request):
 			boundedBody(response.body)
 		)
 	end
-	local decoded = decode(response.body)
-	if type(decoded) ~= "table" then
+	local parsed, decoded = pcall(decode, response.body)
+	if not parsed or type(decoded) ~= "table" then
 		return refusal(
 			response.status,
 			"the platform answered with an unreadable permission response",
 			boundedBody(response.body)
 		)
 	end
-	local body = decoded :: { [string]: unknown }
-	for key in body do
+	for key in decoded do
 		if type(key) == "string" and key ~= "successAssetIds" and key ~= "errors" then
 			return refusal(
 				response.status,
@@ -199,9 +199,9 @@ local function attempt(send: SendAuthorized, decode: Decode, prepared: Request):
 			)
 		end
 	end
-	local observed = confirmedAssetIds(body.successAssetIds)
-	local errors = body.errors
-	if type(errors) ~= "table" or next(errors :: { unknown }) ~= nil then
+	local observed = confirmedAssetIds(Wire.field(decoded, "successAssetIds"))
+	local errors = Wire.field(decoded, "errors")
+	if type(errors) ~= "table" or next(errors) ~= nil then
 		return refusal(response.status, "the permission response carried errors", boundedBody(response.body), observed)
 	end
 	if observed == nil then

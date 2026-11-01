@@ -115,6 +115,25 @@ local function review(
 	return { ok = true }
 end
 
+local function field(value: unknown, name: string): unknown
+	if type(value) == "table" then
+		for key, item in value do
+			if key == name then
+				return item
+			end
+		end
+	end
+	return nil
+end
+
+local function finiteNumber(value: unknown): number?
+	local number = if type(value) == "number" then value elseif type(value) == "string" then tonumber(value) else nil
+	if number == nil or number ~= number or math.abs(number) == math.huge then
+		return nil
+	end
+	return number
+end
+
 local function probe(path: string, run: Run?): { ok: true, probe: Probe } | Failure
 	local result = (run or defaultRun) {
 		"ffprobe",
@@ -133,39 +152,43 @@ local function probe(path: string, run: Run?): { ok: true, probe: Probe } | Fail
 	if not parsed or type(document) ~= "table" then
 		return { ok = false, diagnostic = "ffprobe returned no JSON document" }
 	end
-	local doc = document :: {
-		streams: {
-			{
-				codec_type: unknown,
-				codec_name: unknown,
-				sample_rate: string | number?,
-				channels: string | number?,
-			}
-		}?,
-		format: { duration: string | number?, bit_rate: string | number? }?,
-	}
-	local stream: { codec_type: unknown, codec_name: unknown, sample_rate: string | number?, channels: string | number? }? =
-		nil
-	for _, candidate in
-		(doc.streams or {}) :: { { codec_type: unknown, codec_name: unknown, sample_rate: string | number?, channels: string | number? } }
-	do
-		if candidate.codec_type == "audio" then
-			stream = candidate
-			break
+	local streams = field(document, "streams")
+	local format = field(document, "format")
+	local stream: unknown = nil
+	if type(streams) == "table" then
+		for _, candidate in streams do
+			if field(candidate, "codec_type") == "audio" then
+				stream = candidate
+				break
+			end
 		end
 	end
-	local duration = tonumber(doc.format and doc.format.duration)
-	if stream == nil or duration == nil then
+	local duration = finiteNumber(field(format, "duration"))
+	local codec = field(stream, "codec_name")
+	local sampleRate = finiteNumber(field(stream, "sample_rate"))
+	local channels = finiteNumber(field(stream, "channels"))
+	if
+		duration == nil
+		or duration < 0
+		or type(codec) ~= "string"
+		or codec == ""
+		or sampleRate == nil
+		or sampleRate <= 0
+		or sampleRate % 1 ~= 0
+		or channels == nil
+		or channels < 1
+		or channels % 1 ~= 0
+	then
 		return { ok = false, diagnostic = "the file has no measurable audio stream" }
 	end
 	return {
 		ok = true,
 		probe = {
 			durationSeconds = duration,
-			codec = tostring(stream.codec_name),
-			sampleRate = tonumber(stream.sample_rate) or 0,
-			channels = tonumber(stream.channels) or 0,
-			bitRate = tonumber((doc.format :: { duration: string | number?, bit_rate: string | number? }).bit_rate),
+			codec = codec,
+			sampleRate = sampleRate,
+			channels = channels,
+			bitRate = finiteNumber(field(format, "bit_rate")),
 		},
 	}
 end

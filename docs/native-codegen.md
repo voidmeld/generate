@@ -45,8 +45,8 @@ Use the engine operations in a context that the consumer authorizes:
 Record the input identity and engine and host versions.
 Record the encoded and disk digests, byte count, comparison result and cleanup.
 List fields that you cannot observe.
-[Native transcripts](api.md#native-transcripts) keep bound Studio calls and captures.
-They preserve geometry only if their calls export it.
+Retain the consumer's original tool requests, results and captures alongside the exported bytes.
+Call records preserve geometry only when their calls export it.
 
 If authorized serialization is unavailable, a local serializer can reconstruct observed properties for later verification.
 Record omitted fields. Require an engine reimport and readback before you claim an equivalent result.

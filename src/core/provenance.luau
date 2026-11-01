@@ -15,6 +15,7 @@ type RightsFactsDraft = Types.RightsFactsDraft
 local SCHEMA_VERSION = 1
 
 local FACT_NAMES: { Types.RightsFactName } = { "consent", "license", "owner", "source" }
+local PARENT_FIELDS = { "artifactId", "artifactDigest", "receiptId", "receiptFingerprint", "jobId", "briefFingerprint" }
 local ORIGINS: { [string]: boolean } = { original = true, derived = true, imported = true }
 local DISPOSITIONS: { [string]: boolean } = {
 	active = true,
@@ -50,6 +51,19 @@ local function fact(value: RightsFact?, name: string): RightsFact
 	return { state = "known", value = value.value }
 end
 
+local function namedFact(value: RightsFacts, name: Types.RightsFactName): RightsFact?
+	if name == "source" then
+		return value.source
+	elseif name == "license" then
+		return value.license
+	elseif name == "owner" then
+		return value.owner
+	elseif name == "consent" then
+		return value.consent
+	end
+	return nil
+end
+
 local function rights(draft: RightsFactsDraft?): RightsFacts
 	local source: RightsFactsDraft = draft or {}
 	Secret.validate(source, "Generate rights facts")
@@ -63,7 +77,7 @@ local function rights(draft: RightsFactsDraft?): RightsFacts
 	}
 	local known = 0
 	for _, name in FACT_NAMES do
-		if facts[name].state == "known" then
+		if assert(namedFact(facts, name)).state == "known" then
 			known += 1
 		end
 	end
@@ -76,10 +90,16 @@ local function parent(reference: ParentRef, index: number): ParentRef
 		error(("Generate derivation parent %d must be a table"):format(index), 3)
 	end
 	local named = false
-	local fields: { "artifactId" | "artifactDigest" | "receiptId" | "receiptFingerprint" | "jobId" | "briefFingerprint" } =
-		{ "artifactId", "artifactDigest", "receiptId", "receiptFingerprint", "jobId", "briefFingerprint" }
-	for _, field in fields do
-		local value = reference[field]
+	local values: { string? } = {
+		reference.artifactId,
+		reference.artifactDigest,
+		reference.receiptId,
+		reference.receiptFingerprint,
+		reference.jobId,
+		reference.briefFingerprint,
+	}
+	for at, field in PARENT_FIELDS do
+		local value = values[at]
 		if value ~= nil then
 			if type(value) ~= "string" or value == "" then
 				error(("Generate derivation parent %d field %s must be a non-empty string"):format(index, field), 3)
@@ -223,7 +243,7 @@ local function requirementFaults(
 		table.insert(faults, ("artifact %q declares %s origin without parent lineage"):format(artifactId, value.origin))
 	end
 	for _, name in contract.requiredRightsFacts do
-		local claim: RightsFact = value.rights[name]
+		local claim = namedFact(value.rights, name)
 		if claim == nil or claim.state ~= "known" then
 			table.insert(faults, ("artifact %q has unknown-history rights fact %q"):format(artifactId, name))
 			continue
@@ -237,7 +257,7 @@ local function requirementFaults(
 			if ancestor == nil then
 				continue
 			end
-			local inherited: RightsFact = ancestor.rights[name]
+			local inherited = namedFact(ancestor.rights, name)
 			if inherited == nil or inherited.state ~= "known" then
 				table.insert(
 					faults,

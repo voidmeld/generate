@@ -22,7 +22,7 @@ local brief = Generate.brief {
 	},
 	provenance = {
 		requireParentLineage = true,
-		requiredRightsFacts = { "source", "license", "owner", "consent" } :: { Generate.RightsFactName },
+		requiredRightsFacts = { "source", "license", "owner", "consent" },
 	},
 	delivery = { semanticId = "example.icon", target = "local" },
 }

@@ -42,7 +42,6 @@ local productMaterial: { Rule } = {
 			["tests/asset-lane.lute.verify.luau:rbxassetid://4242"] = "synthetic model reference fixture",
 			["tests/asset-lane.lute.verify.luau:rbxassetid://777"] = "synthetic unexpected model reference",
 			["tests/consumer.verify.luau:rbxassetid://1"] = "consumer diagnostic refusal fixture",
-			["tests/roblox-publication.verify.luau:rbxassetid://9"] = "synthetic publication readback",
 		},
 	},
 	{ allMatches = true, pattern = "rbxthumb://", why = "product asset identifier" },
@@ -51,13 +50,11 @@ local productMaterial: { Rule } = {
 		allMatches = true,
 		pattern = "%f[%w_]placeId%s*=%s*[1-9]%d*",
 		why = "product place identifier",
-		exempt = { ["tests/roblox-publication.verify.luau:placeId = 222"] = "synthetic permission destination" },
 	},
 	{
 		allMatches = true,
 		pattern = "%f[%w_]universeId%s*=%s*[1-9]%d*",
 		why = "product universe identifier",
-		exempt = { ["tests/roblox-publication.verify.luau:universeId = 111"] = "synthetic publication destination" },
 	},
 }
 

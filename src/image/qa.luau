@@ -44,8 +44,14 @@ local function requireThresholds(config: Config)
 	if type(limits) ~= "table" then
 		error("Generate image QA requires the consumer to declare its thresholds table", 3)
 	end
+	local declared: { [string]: unknown } = {}
+	for key, value in limits do
+		if type(key) == "string" then
+			declared[key] = value
+		end
+	end
 	for _, name in THRESHOLD_NAMES do
-		local value = (limits :: { [string]: unknown })[name]
+		local value = declared[name]
 		if type(value) ~= "number" or value ~= value then
 			error(("Generate image QA requires the consumer to declare threshold %s as a number"):format(name), 3)
 		end
@@ -108,7 +114,7 @@ local function assess(config: Config, bytes: string, declaration: Declaration, p
 			warnings = warnings,
 		}
 	end
-	local image = decoded.image :: Codec.Image
+	local image = decoded.image
 
 	local tiles = Metrics.tileability(image)
 	local interior = Metrics.interiorSeams(image)
@@ -406,8 +412,10 @@ local function assess(config: Config, bytes: string, declaration: Declaration, p
 			},
 		}
 		for _, value in bands do
-			local factKey = if value.key == "p5" then "luma5" elseif value.key == "p50" then "luma50" else "luma95"
-			local measured = hints[factKey] :: number
+			local measured = if value.key == "p5"
+				then hints.luma5
+				elseif value.key == "p50" then hints.luma50
+				else hints.luma95
 			if measured < value.min or measured > value.max then
 				table.insert(
 					refusals,
@@ -458,7 +466,7 @@ local function assess(config: Config, bytes: string, declaration: Declaration, p
 					refusal(
 						"key-residue",
 						("%d transparent texels hold saturated RGB; every mip level averages that colour back into the visible edge"):format(
-							opacity.keyResidueTexels :: number
+							assert(opacity.keyResidueTexels)
 						),
 						opacity.keyResidueFraction,
 						limits.maxKeyResidueFraction
@@ -601,7 +609,7 @@ local function gate(config: Config, deps: Deps, declarations: { Declaration }, l
 			table.insert(reasons, ("paired group %s could not decode both images"):format(group))
 			continue
 		end
-		local a, b = first.image :: Codec.Image, second.image :: Codec.Image
+		local a, b = first.image, second.image
 		if a.width ~= b.width or a.height ~= b.height then
 			table.insert(reasons, ("paired group %s has mismatched dimensions"):format(group))
 			continue

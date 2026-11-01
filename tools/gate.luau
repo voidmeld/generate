@@ -56,6 +56,7 @@ local lint: { string } = { "lute", "lint", "--verbose", "-c", "lint.config.luau"
 local types: { string } = {
 	"luau-lsp",
 	"analyze",
+	"--flag:LuauSolverV2=true",
 	"--platform=standard",
 	"--base-luaurc=.luaurc",
 	"--ignore=**/.lute/**",
@@ -114,13 +115,14 @@ for _, example in examples do
 	table.insert(producers, check("example-" .. name, { "lute", "run", example }, "fast"))
 end
 if benchmark then
-	table.insert(producers, {
+	local producer: Gate.ProducerDraft = {
 		id = "benchmark",
 		kind = "benchmark",
 		benchmark = require "../bench/simple-path",
 		tier = "benchmark",
 		why = "measures one execution stage; records raw samples and applies no budget",
-	})
+	}
+	table.insert(producers, producer)
 end
 
 local exitCode = Lute.gate.cli({

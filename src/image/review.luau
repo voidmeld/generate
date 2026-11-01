@@ -91,13 +91,14 @@ local function stage(config: Config, request: Request, artifacts: { Generate.Art
 			}
 		end
 		covered[entry.view] = true
-		table.insert(evidence, {
+		local reference: Generate.EvidenceRef = {
 			id = artifact.id,
 			digest = artifact.digest,
 			digestAlgorithm = "sha256",
 			view = entry.view,
 			role = entry.role,
-		})
+		}
+		table.insert(evidence, reference)
 	end
 	for _, view in request.requestedViews do
 		if not covered[view] then

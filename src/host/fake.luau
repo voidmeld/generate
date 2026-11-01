@@ -11,7 +11,7 @@ type StageOutcome = Generate.StageOutcome
 export type Options = {
 	capabilities: { string }?,
 	environment: { [string]: string }?,
-	outcomes: unknown?,
+	outcomes: { [string]: StageOutcome }?,
 	compensationFaults: { [string]: string }?,
 	trace: { string }?,
 	idempotencyKeys: { string }?,
@@ -29,7 +29,7 @@ local function create(options: Options?): Host
 		}
 	local value = 0
 	local trace = settings.trace or {}
-	local outcomes = settings.outcomes :: { [string]: StageOutcome }?
+	local outcomes = settings.outcomes
 	return {
 		name = "generate-fake",
 		capabilities = settings.capabilities or {},
@@ -44,7 +44,7 @@ local function create(options: Options?): Host
 			_artifacts: { Generate.Artifact },
 			_authority: Authority,
 			context: Generate.RunContext
-		)
+		): StageOutcome
 			table.insert(trace, "run:" .. stage.id)
 			if settings.idempotencyKeys ~= nil then
 				table.insert(settings.idempotencyKeys, context.idempotencyKey)

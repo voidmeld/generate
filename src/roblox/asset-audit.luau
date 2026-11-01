@@ -1,8 +1,9 @@
 --!strict
 
-local ReferenceProvenance = require "./reference-provenance"
-
-export type Files = ReferenceProvenance.Files
+export type Files = {
+	read: (path: string) -> string,
+	exists: (path: string) -> boolean,
+}
 
 export type Reference = {
 	committed_source_path: string?,
@@ -73,13 +74,15 @@ local DEFAULT_RECEIPT_FIELDS: { string } = {
 	"image_readback_receipt",
 }
 
-local hiddenPath = ReferenceProvenance.hiddenPath
+local function hiddenPath(path: string): boolean
+	return string.sub(path, 1, 1) == "." or string.find(path, "/.", 1, true) ~= nil
+end
 
 local function nonEmptyStringList(value: unknown): boolean
-	if type(value) ~= "table" or #(value :: { unknown }) == 0 then
+	if type(value) ~= "table" or #value == 0 then
 		return false
 	end
-	for _, item in value :: { unknown } do
+	for _, item in value do
 		if type(item) ~= "string" or item == "" then
 			return false
 		end
@@ -87,8 +90,8 @@ local function nonEmptyStringList(value: unknown): boolean
 	return true
 end
 
-local function positiveId(value: unknown): boolean
-	return type(value) == "number" and (value :: number) > 0
+local function positiveId(value: unknown): number?
+	return if type(value) == "number" and value > 0 then value else nil
 end
 
 local function validInput(input: Input): boolean
@@ -141,12 +144,13 @@ local function referenceViolations(input: Input): { string }
 	end
 
 	for name, reference in input.references do
+		local imageId = positiveId(reference.image_asset_id)
 		for _, field in requiredFields do
 			if type(reference[field]) ~= "string" or reference[field] == "" then
 				referenceViolation(name, "missing " .. field)
 			end
 		end
-		if not positiveId(reference.image_asset_id) then
+		if not imageId then
 			referenceViolation(name, "missing image_asset_id")
 		end
 		if not nonEmptyStringList(reference.reviewer_verdict_ids) then
@@ -155,49 +159,56 @@ local function referenceViolations(input: Input): { string }
 		for _, receiptField in receiptFields do
 			local receipt = reference[receiptField]
 			if type(receipt) == "string" and receipt ~= "" then
-				if hiddenPath(receipt :: string) then
-					referenceViolation(name, ("%s is a hidden path at %s"):format(receiptField, receipt :: string))
+				if hiddenPath(receipt) then
+					referenceViolation(name, ("%s is a hidden path at %s"):format(receiptField, receipt))
 				end
-				if not files.exists(receipt :: string) then
-					referenceViolation(name, ("%s missing at %s"):format(receiptField, receipt :: string))
+				if not files.exists(receipt) then
+					referenceViolation(name, ("%s missing at %s"):format(receiptField, receipt))
 				end
 			end
 		end
 		if type(reference.committed_source_path) == "string" and type(reference.source_sha256) == "string" then
-			local committedPath = reference.committed_source_path :: string
+			local committedPath = reference.committed_source_path
 			if not files.exists(committedPath) then
 				referenceViolation(name, "original missing at " .. committedPath)
 			elseif digest(files.read(committedPath)) ~= reference.source_sha256 then
 				referenceViolation(name, "original hash drift")
 			end
-			local first = seenOriginalHashes[reference.source_sha256 :: string]
+			local first = seenOriginalHashes[reference.source_sha256]
 			if first ~= nil then
 				referenceViolation(name, ('duplicates original identity of %s["%s"]'):format(referenceLabel, first))
 			else
-				seenOriginalHashes[reference.source_sha256 :: string] = name
+				seenOriginalHashes[reference.source_sha256] = name
 			end
-			knownOriginalHashes[reference.source_sha256 :: string] = true
+			knownOriginalHashes[reference.source_sha256] = true
 		end
 		local hasPromptPath = type(reference.prompt_path) == "string" and reference.prompt_path ~= ""
 		local hasInlinePrompt = type(reference.prompt) == "string" and reference.prompt ~= ""
 		if not hasPromptPath and not hasInlinePrompt then
 			referenceViolation(name, "missing prompt_path or prompt")
 		end
-		if hasPromptPath and type(reference.prompt_sha256) == "string" then
-			local promptPath = reference.prompt_path :: string
+		if
+			type(reference.prompt_path) == "string"
+			and reference.prompt_path ~= ""
+			and type(reference.prompt_sha256) == "string"
+		then
+			local promptPath = reference.prompt_path
 			if not files.exists(promptPath) then
 				referenceViolation(name, "prompt missing at " .. promptPath)
 			elseif digest(files.read(promptPath)) ~= reference.prompt_sha256 then
 				referenceViolation(name, "prompt hash drift")
 			end
 		end
-		if hasInlinePrompt and type(reference.prompt_sha256) == "string" then
-			if digest(reference.prompt :: string) ~= reference.prompt_sha256 then
+		if
+			type(reference.prompt) == "string"
+			and reference.prompt ~= ""
+			and type(reference.prompt_sha256) == "string"
+		then
+			if digest(reference.prompt) ~= reference.prompt_sha256 then
 				referenceViolation(name, "inline prompt hash drift")
 			end
 		end
-		if positiveId(reference.image_asset_id) then
-			local imageId = reference.image_asset_id :: number
+		if imageId then
 			local first = seenImageIds[imageId]
 			if first ~= nil then
 				referenceViolation(name, ('duplicates image identity of %s["%s"]'):format(referenceLabel, first))
@@ -206,8 +217,8 @@ local function referenceViolations(input: Input): { string }
 			end
 			knownImageIds[imageId] = true
 		end
-		if type(reference.source_sha256) == "string" and positiveId(reference.image_asset_id) then
-			local pair = (reference.source_sha256 :: string) .. "|" .. tostring(reference.image_asset_id :: number)
+		if type(reference.source_sha256) == "string" and imageId then
+			local pair = reference.source_sha256 .. "|" .. tostring(reference.image_asset_id)
 			knownReferencePairs[pair] = name
 		end
 		local eligible = false
@@ -229,25 +240,25 @@ local function referenceViolations(input: Input): { string }
 
 	local seenModels: { [string]: string } = {}
 	for name, model in input.models do
+		local imageId = positiveId(model.reference_image_asset_id)
 		if type(model.reference_sha256) ~= "string" or model.reference_sha256 == "" then
 			modelViolation(name, "missing reference_sha256 reverse link")
 		else
-			linkedOriginalHashes[model.reference_sha256 :: string] = true
-			if not knownOriginalHashes[model.reference_sha256 :: string] then
+			linkedOriginalHashes[model.reference_sha256] = true
+			if not knownOriginalHashes[model.reference_sha256] then
 				modelViolation(name, "reference_sha256 does not resolve to a reference image")
 			end
 		end
-		if not positiveId(model.reference_image_asset_id) then
+		if not imageId then
 			modelViolation(name, "missing reference_image_asset_id reverse link")
 		else
-			local imageId = model.reference_image_asset_id :: number
 			linkedImageIds[imageId] = true
 			if not knownImageIds[imageId] then
 				modelViolation(name, "reference_image_asset_id does not resolve to a reference image")
 			end
 		end
-		if type(model.reference_sha256) == "string" and positiveId(model.reference_image_asset_id) then
-			local pair = (model.reference_sha256 :: string) .. "|" .. tostring(model.reference_image_asset_id :: number)
+		if type(model.reference_sha256) == "string" and imageId then
+			local pair = model.reference_sha256 .. "|" .. tostring(model.reference_image_asset_id)
 			if knownReferencePairs[pair] == nil then
 				modelViolation(name, "reference SHA/Image ID pair does not resolve to one reference image")
 			end
@@ -257,11 +268,8 @@ local function referenceViolations(input: Input): { string }
 		end
 		if type(model.comparison_verdict_receipt) ~= "string" or model.comparison_verdict_receipt == "" then
 			modelViolation(name, "missing comparison_verdict_receipt")
-		elseif not files.exists(model.comparison_verdict_receipt :: string) then
-			modelViolation(
-				name,
-				"comparison_verdict_receipt missing at " .. (model.comparison_verdict_receipt :: string)
-			)
+		elseif not files.exists(model.comparison_verdict_receipt) then
+			modelViolation(name, "comparison_verdict_receipt missing at " .. model.comparison_verdict_receipt)
 		end
 		local hasUuid = type(model.model_uuid) == "string" and model.model_uuid ~= ""
 		local hasDurableId = positiveId(model.durable_model_asset_id)
@@ -269,11 +277,11 @@ local function referenceViolations(input: Input): { string }
 			modelViolation(name, "missing model_uuid/durable_model_asset_id")
 		else
 			local identities: { string } = {}
-			if hasUuid then
-				table.insert(identities, model.model_uuid :: string)
+			if type(model.model_uuid) == "string" and model.model_uuid ~= "" then
+				table.insert(identities, model.model_uuid)
 			end
 			if hasDurableId then
-				table.insert(identities, tostring(model.durable_model_asset_id :: number))
+				table.insert(identities, tostring(model.durable_model_asset_id))
 			end
 			for _, identity in identities do
 				local first = seenModels[identity]
@@ -287,14 +295,12 @@ local function referenceViolations(input: Input): { string }
 	end
 
 	for name, reference in input.references do
+		local imageId = positiveId(reference.image_asset_id)
 		if reference.disposition == config.terminalDisposition then
-			if
-				type(reference.source_sha256) ~= "string"
-				or not linkedOriginalHashes[reference.source_sha256 :: string]
-			then
+			if type(reference.source_sha256) ~= "string" or not linkedOriginalHashes[reference.source_sha256] then
 				referenceViolation(name, "missing conditioned-model reverse link by original SHA")
 			end
-			if not positiveId(reference.image_asset_id) or not linkedImageIds[reference.image_asset_id :: number] then
+			if not imageId or not linkedImageIds[imageId] then
 				referenceViolation(name, "missing conditioned-model reverse link by Image asset ID")
 			end
 		end

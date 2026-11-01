@@ -120,7 +120,7 @@ local function runStage(
 	local artifactByPath: { [string]: Generate.Artifact } = {}
 	for _, artifact in artifacts do
 		if artifact.locator ~= nil then
-			artifactByPath[artifact.locator :: string] = artifact
+			artifactByPath[artifact.locator] = artifact
 		end
 	end
 	for _, input in transform.inputs do
@@ -155,16 +155,13 @@ local function runStage(
 	if not measured.ok then
 		return rejected(("transform %s: %s"):format(transform.id, measured.diagnostic))
 	end
-	local measurement = measured.measurement :: Measure.Measurement
+	local measurement = measured.measurement
 	local artifact = Measure.artifact(config.measure, transform.id, transform.outputPath, measurement)
 
 	local parents: { Generate.ParentRef } = {}
 	local inputDigests: { string } = {}
 	for _, input in transform.inputs do
-		table.insert(
-			parents,
-			{ artifactId = (artifactByPath[input.path] :: Generate.Artifact).id, artifactDigest = before[input.path] }
-		)
+		table.insert(parents, { artifactId = artifactByPath[input.path].id, artifactDigest = before[input.path] })
 		table.insert(inputDigests, before[input.path])
 	end
 	local environment: { [string]: string } = {

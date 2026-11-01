@@ -4,7 +4,7 @@ local Wire = require "./wire"
 
 export type SendAuthorized = Wire.SendAuthorized
 export type Decode = Wire.Decode
-type Response = Wire.Response
+local field = Wire.field
 
 export type Owner = {
 	creatorType: "Group" | "User",
@@ -72,7 +72,7 @@ local RETRY_BASE_SECONDS = 1
 local MAX_RESET_SECONDS = 60
 
 local APPROVED_STATES: { [string]: boolean } = { Active = true, Approved = true }
-local THROTTLED_STATUSES: { [number]: boolean } = { [429] = true, [401] = true, [503] = true }
+local THROTTLED_STATUSES: { [number]: boolean } = { [429] = true, [503] = true }
 
 local ASSET_TYPE_NAMES: { [number]: string } = {
 	[1] = "Image",
@@ -96,13 +96,10 @@ local paceValues: { [Options]: number } = {}
 local paceState = setmetatable(paceValues, { __mode = "k" })
 
 local function validOwner(owner: unknown): boolean
-	if type(owner) ~= "table" then
-		return false
-	end
-	local typed = owner :: Owner
-	return (typed.creatorType == "Group" or typed.creatorType == "User")
-		and type(typed.creatorId) == "string"
-		and string.match(typed.creatorId, "^[1-9][0-9]*$") ~= nil
+	local creatorType, creatorId = field(owner, "creatorType"), field(owner, "creatorId")
+	return (creatorType == "Group" or creatorType == "User")
+		and type(creatorId) == "string"
+		and string.match(creatorId, "^[1-9][0-9]*$") ~= nil
 end
 
 local function requireOptions(options: Options)
@@ -127,20 +124,15 @@ local function normalizedId(value: unknown): string
 end
 
 local function creatorOf(document: unknown): (string, string)
-	local context = if type(document) == "table" then (document :: { [string]: unknown }).creationContext else nil
-	local creator = if type(context) == "table" then (context :: { [string]: unknown }).creator else nil
+	local creator = field(field(document, "creationContext"), "creator")
 	if type(creator) ~= "table" then
-		creator = if type(document) == "table" then (document :: { [string]: unknown }).creator else nil
+		creator = field(document, "creator")
 	end
-	if type(creator) ~= "table" then
-		return "unknown", ""
-	end
-	local fields = creator :: { [string]: unknown }
-	local groupId = normalizedId(fields.groupId)
+	local groupId = normalizedId(field(creator, "groupId"))
 	if groupId ~= "" then
 		return "Group", groupId
 	end
-	local userId = normalizedId(fields.userId)
+	local userId = normalizedId(field(creator, "userId"))
 	if userId ~= "" then
 		return "User", userId
 	end
@@ -168,7 +160,7 @@ local function unknownRecord(assetId: string, status: number, diagnostic: string
 end
 
 local function text(value: unknown, fallback: string): string
-	return if type(value) == "string" then value :: string else fallback
+	return if type(value) == "string" then value else fallback
 end
 
 local function parse(options: Options, assetId: string, status: number, body: string): Record
@@ -179,28 +171,23 @@ local function parse(options: Options, assetId: string, status: number, body: st
 	if not ok or type(document) ~= "table" then
 		return unknownRecord(assetId, status, "the asset record is not deserializable JSON")
 	end
-	local typed = document :: { [string]: unknown }
-	local creatorType, creatorId = creatorOf(typed)
+	local creatorType, creatorId = creatorOf(document)
 	local owned = creatorType == options.owner.creatorType and creatorId == options.owner.creatorId
-	local moderation = typed.moderationResult
-	local moderationState = if type(moderation) == "table"
-			and type((moderation :: { [string]: unknown }).moderationState) == "string"
-		then (moderation :: { [string]: unknown }).moderationState :: string
-		else "unknown"
-	local returned = normalizedId(typed.assetId)
+	local moderationState = text(field(field(document, "moderationResult"), "moderationState"), "unknown")
+	local returned = normalizedId(field(document, "assetId"))
 	local record: Record = {
 		assetId = if returned == "" then assetId else returned,
-		path = text(typed.path, ""),
-		assetType = text(typed.assetType, "unknown"),
-		displayName = text(typed.displayName, ""),
+		path = text(field(document, "path"), ""),
+		assetType = text(field(document, "assetType"), "unknown"),
+		displayName = text(field(document, "displayName"), ""),
 		creatorType = creatorType,
 		creatorId = creatorId,
 		ownedByDeclaredCreator = owned,
 		foreignOwnershipPossible = not owned,
 		moderationState = moderationState,
-		state = text(typed.state, "unknown"),
+		state = text(field(document, "state"), "unknown"),
 		privacy = PRIVACY_UNOBSERVABLE,
-		revisionId = text(typed.revisionId, ""),
+		revisionId = text(field(document, "revisionId"), ""),
 		status = status,
 		diagnostic = "",
 		source = RECORD_SOURCE,
@@ -219,30 +206,30 @@ local function parseDetails(options: Options, assetId: string, refused: Record, 
 	if not ok or type(document) ~= "table" then
 		return refused
 	end
-	local typed = document :: { [string]: unknown }
-	if normalizedId(typed.AssetId) ~= assetId then
+	if normalizedId(field(document, "AssetId")) ~= assetId then
 		return refused
 	end
-	local creator = typed.Creator
+	local creator = field(document, "Creator")
 	if type(creator) ~= "table" then
 		return refused
 	end
-	local fields = creator :: { [string]: unknown }
-	local creatorType = if fields.CreatorType == "Group"
+	local creatorTypeValue = field(creator, "CreatorType")
+	local creatorType = if creatorTypeValue == "Group"
 		then "Group"
-		elseif fields.CreatorType == "User" then "User"
+		elseif creatorTypeValue == "User" then "User"
 		else "unknown"
-	local creatorId = normalizedId(fields.CreatorTargetId)
+	local creatorId = normalizedId(field(creator, "CreatorTargetId"))
 	if creatorType == "unknown" or creatorId == "" then
 		return refused
 	end
 	local owned = creatorType == options.owner.creatorType and creatorId == options.owner.creatorId
-	local typeId = if type(typed.AssetTypeId) == "number" then typed.AssetTypeId else -1
+	local declaredType = field(document, "AssetTypeId")
+	local typeId = if type(declaredType) == "number" then declaredType else -1
 	return {
 		assetId = assetId,
 		path = "",
 		assetType = ASSET_TYPE_NAMES[typeId] or ("AssetTypeId:" .. tostring(typeId)),
-		displayName = text(typed.Name, ""),
+		displayName = text(field(document, "Name"), ""),
 		creatorType = creatorType,
 		creatorId = creatorId,
 		ownedByDeclaredCreator = owned,
@@ -261,9 +248,9 @@ local function resetSeconds(headers: unknown): number?
 	if type(headers) ~= "table" then
 		return nil
 	end
-	for name, value in headers :: { [unknown]: unknown } do
+	for name, value in headers do
 		if type(name) == "string" and string.lower(name) == "x-ratelimit-reset" then
-			local seconds = tonumber(value :: string | number)
+			local seconds = if type(value) == "string" or type(value) == "number" then tonumber(value) else nil
 			if seconds ~= nil and seconds > 0 then
 				return math.min(seconds, MAX_RESET_SECONDS)
 			end
@@ -304,36 +291,33 @@ local function readback(options: Options, assetId: string): Record
 		if options.paced == true then
 			pace(options, sleep)
 		end
-		local ok, answer = pcall(options.send, {
-			method = "GET" :: "GET",
+		local request: Wire.AuthorizedRequest = {
+			method = "GET",
 			url = assetRecordUrl(id, options.baseUrl),
 			headers = { Accept = "application/json" },
-		})
+		}
+		local ok, response = pcall(options.send, request)
 		if not ok then
-			return unknownRecord(id, 0, "the read failed: " .. string.sub(tostring(answer), 1, 500))
+			return unknownRecord(id, 0, "the read failed: " .. string.sub(tostring(response), 1, 500))
 		end
-		local response = answer :: Response
 		if THROTTLED_STATUSES[response.status] ~= true or attempt > retries then
 			local record = parse(options, id, response.status, response.body)
 			local sendPublic = options.sendPublic
 			if response.status ~= 403 or sendPublic == nil then
 				return record
 			end
-			local detailsOk, details = pcall(sendPublic, {
-				method = "GET" :: "GET",
+			local detailsRequest: Wire.AuthorizedRequest = {
+				method = "GET",
 				url = publicDetailsUrl(id, options.detailsBaseUrl),
 				headers = { Accept = "application/json" },
-			})
+			}
+			local detailsOk, details = pcall(sendPublic, detailsRequest)
 			if not detailsOk then
 				return record
 			end
-			local answered = details :: Response
-			return parseDetails(options, id, record, answered.status, answered.body)
+			return parseDetails(options, id, record, details.status, details.body)
 		end
-		sleep(
-			resetSeconds((response :: Response & { headers: unknown? }).headers)
-				or RETRY_BASE_SECONDS * 2 ^ (attempt - 1)
-		)
+		sleep(resetSeconds(field(response, "headers")) or RETRY_BASE_SECONDS * 2 ^ (attempt - 1))
 	end
 end
 

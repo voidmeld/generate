@@ -7,7 +7,7 @@ Core owns those records. The consumer supplies art direction, host operations an
 | --- | --- |
 | Describe an asset and run its stages | [Brief, plan and execution](#brief-plan-and-execution) |
 | Review exact bytes and select delivery | [Review and delivery](#review-and-delivery) |
-| Declare the destination of a brief and record its outcome | [Delivery destination and publication records](#delivery-destination-and-publication-records) |
+| Declare the intended destination of a brief | [Delivery destinations](#delivery-destinations) |
 | Use Roblox: save, publish, grant, read back or audit assets | [Roblox adapter](#roblox-adapter) |
 | Measure, convert or render audio for review | [Media](#media) |
 | Bind a content compiler, a process tool or a reviewer | [Content, process and reviewer adapters](#content-process-and-reviewer-adapters) |
@@ -159,28 +159,11 @@ Derivations and rights do not invent rights facts.
 The consumer owns registry adoption and runtime acceptance.
 See [accepted delivery](../examples/accepted-manifest.generate.luau) and [revision rollover](../examples/candidate-revision.luau).
 
-### Quotas and capture evidence
-
-Quotas compare measured values with ceilings. Capture brackets check that evidence follows the declared capture order.
-
-| Task | Call |
-| --- | --- |
-| Compare measured values and a kind with their declared ceilings and allowed kinds | `Generate.evaluateQuota` |
-| Declare the ordered poses of a capture | `Generate.evidenceBracket` |
-| Check captured evidence against the declared bracket | `Generate.bindEvidence` |
-| List the checked evidence in capture order | `Generate.evidenceManifest` |
-| Match a refusal reason of a bracket | `Generate.EVIDENCE_BRACKET_REASONS` |
-
-`Generate.evaluateQuota` takes values that the consumer measured. It does not measure native assets and does not choose budgets.
-A bracket requires the exact declared capture order, poses and digest mode. A refused bracket gives no manifest. A bracket does not capture or hash bytes.
-
-See [quotas](../examples/asset-quota.generate.luau) and [capture brackets](../examples/evidence-bracket.generate.luau).
-
 ---
 
-## Delivery destination and publication records
+## Delivery destinations
 
-A destination says where a brief delivers. A publication record says what happened there.
+A destination records the intended delivery target. Delivery outcomes belong to the transport journal and consumer verification.
 
 ### Declare the destination
 
@@ -194,50 +177,6 @@ Core refuses a descriptor with a secret-shaped key or a value that is not data.
 Credentials are never brief values. A descriptor can carry only the name of a credential.
 The destination is a record. Generate does not perform the publication.
 
-### Record the outcome
-
-A `PublicationRecord` is the delivery receipt of one destination. It contains these items:
-
-- the `disposition`, which is a name that the adapter chooses, and the `state`
-- the `contentId` and `version` that the destination assigned, and the `readback` of the destination
-- the `credential` name and a `false` exposure attestation
-- the attempt journal, the compensation journal, the stages and the optional economics
-- `facts`, an adapter-owned data table
-- an optional `verification`, `verificationRequest` and `verificationCompletion`
-
-A record is always `quarantined`. Promotion is the decision of the consumer.
-`dryRun` and `placeholder` are explicit booleans.
-
-### States
-
-The state of a record says how far its destination settled.
-
-| State | Meaning |
-| --- | --- |
-| `pending` | The destination has not settled. Confirm it later. |
-| `confirmed` | The destination settled. |
-| `reconciled` | Source-bound read-only evidence recovered a stopped record. Confirm it later. |
-| `stopped` | The record is final. It is a refusal, a dry run, a partial result or a failed recovery. |
-
-- `Generate.attachPublication(receipt, record)` binds a quarantined, secret-free record to an unchanged receipt. It refuses a receipt that already records a non-dry-run attempt.
-- `Generate.confirmPublication(receipt, record)` replaces only a `pending` or `reconciled` record.
-- `Generate.reconcilePublication(receipt, record)` accepts only a source-bound recovery of a `stopped` record. That record has one failed-readback create and one failed compensation. The new record keeps the attempt history.
-- `Generate.publicationFault(record)` returns the first generic fault of a record, or `nil`.
-
-Each call returns a receipt with a new fingerprint.
-Use records from the consumer delivery path. Do not replace them with manually written acceptance claims.
-
-### Host verification
-
-A host verification record describes a test of delivered content in a named host build.
-It has a `contentId`, a `hostBuild`, an observation window, adapter `measurements`, scanned `diagnostics` and a `verified` or `refused` disposition.
-A `refused` record names a refusal reason.
-
-- A `verificationRequest` binds the exact publication identity, the source receipt, the host and the host build. It defers verification.
-- `confirmPublication` completes a request only with a `verificationCompletion` that binds the request and the pending receipt.
-- `confirmPublication` can also rebind an uncompleted request to a different `hostBuild`. It keeps the prior lineage in `verificationRebindings`.
-- `Generate.hostVerified(receipt)` is `true` only for an accepted receipt with a confirmed, non-dry-run, non-placeholder record and a `verified` observation of the same `contentId`.
-
 ## Roblox adapter
 
 The Roblox adapter binds Generate to Roblox: it saves, publishes, grants, reads back and audits assets.
@@ -247,50 +186,29 @@ Each module does one job.
 | Task | Module |
 | --- | --- |
 | Save a reviewed file or native object without a brief | [`Roblox.delivery`](#direct-delivery) |
-| Publish one planned asset under a grant, with readback and rollback | [`Roblox.assetPublication`](#asset-publication) |
-| Describe a Roblox destination and record its publication facts | [`Roblox.publicationRecord`](#publication-records) |
+| Describe a Roblox destination | `Roblox.destination` and `Roblox.readDestination` |
 | Let a universe use assets that your creator owns | [`Roblox.permissionGrant`](#permission-grants) |
 | Read an asset, its owner and its moderation state | [`Roblox.assetReadback`](#asset-readback) |
-| Prove the provenance of a reference image and add its row to a manifest | [`Roblox.referenceProvenance`](#reference-provenance) |
 | Audit the reference rows of a manifest | [`Roblox.assetAudit`](#asset-audit) |
 | Read a binary instance file | [`Roblox.rbxm`](#binary-instance-files) |
-| Keep exact Studio calls and captures | [`Roblox.nativeTranscript`](#native-transcripts) |
-| Convert a size to studs | [`Roblox.units`](#publication-records) |
+| Convert a size to studs | [`Roblox.units`](#destinations-and-units) |
 
-`Roblox.delivery` and `Roblox.assetPublication` both create assets through the Assets API.
-Use `Roblox.delivery` for one reviewed file or native object. It needs no brief.
-Use `Roblox.assetPublication` for a plan stage. It needs a brief, a grant and rollback data.
+`Roblox.delivery` owns reviewed file uploads and native-object saves, with one-attempt journals, moderation readback and recovery. It needs no brief.
 
 The transport types are `Roblox.CloudRequest`, `Roblox.CloudResponse` and `Roblox.CloudSend`.
 `send(request)` receives a `CloudRequest` and returns a `CloudResponse` with `ok`, `status` and `body`.
 
-### Publication records
+### Destinations and units
 
-`Roblox.publicationRecord` describes a Roblox destination and maps Roblox facts onto the [publication records](#delivery-destination-and-publication-records). Core never reads them.
-
-| Task | Call |
-| --- | --- |
-| Declare a destination | `Roblox.publicationRecord.destination(draft)` returns a `Generate.Destination` with the adapter name `roblox`. |
-| Read a destination | `Roblox.publicationRecord.readDestination(destination)` returns the typed fields. |
-| Build the facts of a record | `Roblox.publicationRecord.facts(facts)` returns the `facts` table. It holds `universeGrants`, `dependencyGrants` and an optional `accessClosure`. |
-| Read the facts of a record | `Roblox.publicationRecord.readFacts(record)` returns the typed facts. |
-| Build a verification request | `Roblox.publicationRecord.request(draft)` maps the creator, universes, place, consumer, Studio version and build onto the generic request. |
-| Find the first fault of a record | `Roblox.publicationRecord.recordFault(record)` |
-| Attach a record to a receipt | `Roblox.publicationRecord.attach(receipt, record)` |
-| Confirm a pending record | `Roblox.publicationRecord.confirm(receipt, record)` |
-| Reconcile a stopped record | `Roblox.publicationRecord.reconcile(receipt, record)` |
-| Test host verification | `Roblox.publicationRecord.hostVerified(receipt)` |
-| Match a refusal reason | `Roblox.publicationRecord.REFUSAL_REASONS` lists the reasons. |
-| Convert a size to studs | `Roblox.units.studs(size)` converts a size in metres, centimetres or millimetres. One stud is 0.28 metres. |
+`Roblox.destination(draft)` validates and normalizes a Roblox destination as a `Generate.Destination`.
+`Roblox.readDestination(destination)` reads the typed fields and refuses a descriptor that is not normalized.
+Both preserve the declared creator, asset type, restricted visibility and optional universe requirements.
+`Roblox.units.studs(size)` converts metres, centimetres or millimetres; one stud is 0.28 metres.
 
 The destination descriptor requires `creator`, `assetType`, `visibility` and `credentialName`.
 The `creator` is `group` or `user`. The `visibility` is `private` or `restricted`.
 Optional fields are `assetId`, `displayName`, `description`, `grantUniverses` and `verifyDependencies`.
 Public visibility is refused. `verifyDependencies` needs `grantUniverses`.
-
-The Roblox functions run the Roblox checks and then the generic calls.
-`Roblox.publicationRecord.confirm` also checks the bound access closure of an `access-closure-pending` record.
-`Roblox.publicationRecord.reconcile` accepts only a `failed-compensation` record with unattempted access.
 
 A brief declares `constraints.maxSize = { x, y, z, unit = "m" }`. The unit defaults to metres. Convert the size in the adapter, not in the brief.
 
@@ -385,69 +303,24 @@ It uses `AssetService:CreateAssetAsync` through `host.create`.
 | Keep native records on a Studio Instance | `Roblox.delivery.native.attributeStore(instance, httpService)` |
 
 
-### Asset publication
-
-`Roblox.assetPublication` publishes one planned asset through the Assets API under a grant, reads it back and keeps the data for rollback.
-The grant authorizes exactly one attempt. A failure after the request left is never sent again.
-
-| Task | Call |
-| --- | --- |
-| Check a grant: creator, asset type, visibility, action and attempt limit | `Roblox.assetPublication.grant(draft)` |
-| Build the Assets API operations with a poll budget | `Roblox.assetPublication.operations(options)` |
-| Run one granted publication as a stage and return its outcome | `Roblox.assetPublication.publish(operations, brief, artifacts, draft, idempotencyKey)` |
-| Run several granted stages in order, with compensation | `Roblox.assetPublication.transaction(adapter, stages, fingerprint)` |
-| Name the disposition of a stage outcome | `Roblox.assetPublication.classify(outcome)` |
-| Match a disposition | `Roblox.assetPublication.DISPOSITIONS` lists every name that a transaction can return. |
-
-A grant requires these fields:
-
-- `schemaVersion = 1`, `id`, `actor` and `policy`
-- `briefFingerprint`, `idempotencyKey`, `artifactDigest` and `semanticId`
-- `target`, `assetType` and `creator`
-- `action`: `create` or `update`
-- `visibility`: `private` or `restricted`
-- `permissionChanges = false` and `maxAttempts = 1`
-
-The `assetId` field is optional.
-It may also carry a `displayName` and a `description`. Both are then required.
-An update grant binds one existing asset. A create grant binds none.
-
-`operations(options)` needs `send`, `toolVersion`, `encode`, `decode`, `readArtifact` and `maxPolls`.
-Optional fields are `waitBeforePoll`, `moderationPollBudget` (default `3`) and `baseUrl`.
-It returns an adapter with `publish`, `readback` and `compensate`.
-
-The functions follow these rules:
-
-1. An update first reads the asset and its current version, so that a rollback is possible.
-2. The adapter sends one create or update request and polls the operation within the poll budget.
-3. It reads the asset back and compares the creator, type, names, visibility and version with the grant.
-4. A rejected or unreadable result returns a fault with the rollback token, when one exists.
-5. A moderation state that is still pending stays `moderation-pending`. The adapter never compensates it.
-6. `transaction` stops at the first stage that is not `published`. It then compensates earlier stages, newest first.
-
-The dispositions are `published`, `refused`, `ambiguous`, `moderation-delayed`, `moderation-pending`, `timed-out`, `partial`, `failed-readback` and `failed-compensation`.
-A `transaction` returns the `disposition`, the attempts, the compensations and the delivered metadata. It never retries.
-
 ### Permission grants
 
-`Roblox.permissionGrant` lets a universe use assets that one creator owns. It checks authority, sorts the assets and records each request before and after it runs.
+`Roblox.permissionGrant` checks the credential subject, prepares ordered asset requests and sends one request per call. The consumer owns authorization, write-ahead records, recovery and destination proof.
 
 | Task | Call |
 | --- | --- |
 | Read the group membership and roles of the credential owner and record them as facts | `Roblox.permissionGrant.subjectAuthority(options, credential, universeId, groupId)` |
-| Split read-back assets into those that the owner can grant and external assets | `Roblox.permissionGrant.census(records, owner)` |
 | Split asset IDs into groups of one request | `Roblox.permissionGrant.chunks(assetIds, size)` |
 | Build the request for one group | `Roblox.permissionGrant.prepare(encode, universeId, assetIds)` |
 | Send one request and check that the response confirms exactly the requested assets | `Roblox.permissionGrant.attempt(send, decode, prepared)` |
-| Run all chunks of one transaction | `Roblox.permissionGrant.grant(transaction)` |
 | Compare a prepared request with a stored one | `Roblox.permissionGrant.ENDPOINT` and `Roblox.permissionGrant.MAX_ASSETS_PER_REQUEST` |
 | Set the decision of a credential record | `Roblox.permissionGrant.CREDENTIAL_DECISION` |
 | Match an authority decision | `Roblox.permissionGrant.DECISIONS` has `bound` and `refused`. |
 | Match an authority reason | `Roblox.permissionGrant.REASONS` has `membershipAbsent` and `scopesUncovered`. |
 
-- `chunks` orders the IDs, refuses duplicates and non-numeric IDs, and allows at most `MAX_ASSETS_PER_REQUEST` IDs in a group.
+- `chunks` orders the IDs, refuses duplicates and IDs that cannot be represented exactly as positive integers below 2^53, and allows at most `MAX_ASSETS_PER_REQUEST` IDs in a group.
 - `prepare` builds one `PATCH` request with the action `Use`. It carries the header names and the sorted asset IDs.
-- `grant(transaction)` records each chunk before and after its attempt. It refuses to repeat a settled attempt. A terminal receipt that cannot be written refuses a retry.
+- `attempt` never retries. Malformed JSON, response errors and mismatched confirmations refuse the result while retaining the HTTP status and bounded response body. An unconfirmed result does not authorize another attempt.
 - `subjectAuthority` needs a credential record with `decision = Roblox.permissionGrant.CREDENTIAL_DECISION`, an `authorizedUserId` and permission operations that include `write`.
 
 ### Asset readback
@@ -464,60 +337,9 @@ Every request is a `GET`. A readback proves ownership and state. It authorizes n
 
 A `Record` has the creator, type, moderation state, privacy, revision, `source` and a `diagnostic`. A field that the reply does not carry is `unknown` and never a passing value.
 A `Census` reports foreign owners, unapproved moderation, unresolved IDs and whether the census is closed. It reads exactly the IDs that you name.
+
+Readback retries only HTTP 429 and 503, within `maxRetries`. A rate-limit reset is capped at 60 seconds. HTTP 401 stops immediately. The optional public-details read after HTTP 403 remains an observation; missing moderation stays unknown.
 `options` has `send`, `decode` and `owner`. Optional fields are `sendPublic`, `sleep`, `clock`, `paced`, `baseUrl`, `detailsBaseUrl`, `maxRetries` (default `5`) and `minIntervalSeconds` (default `0.55`).
-The adapter retries only a throttled read. It falls back to the public details only when the record refuses the read and `sendPublic` exists.
-
-### Reference provenance
-
-`Roblox.referenceProvenance.record` proves the provenance of one reference image and adds its row to a manifest text.
-A reference image is an image that guides generation. The row binds these facts:
-
-- the committed source file of the image, its tool, model, prompt, date and SHA-256, as read from a lineage file
-- the uploaded asset, as proved by a recorded readback
-- exactly one independent reviewer verdict, with its receipt and anchor
-- a disposition that the consumer names
-
-`record(config, codecs, files, draft)` runs the checks and returns an `Outcome`. It writes only when all checks pass:
-
-1. The readback names the declared creator, an approved moderation state, a closed dependency census and the same asset ID.
-2. The image is a committed PNG under `config.referenceRoot`. Its bytes match the SHA-256 of its lineage row. Exactly one lineage file names it.
-3. The receipt paths are committed paths. A path that starts with `.` or has a hidden segment is refused, because a fresh checkout does not carry it.
-4. The disposition is not the terminal disposition. The consumer sets that one after the dependent content is published and linked back.
-5. The renderer reproduces the rendered table from the current manifest. Then the row is spliced into the manifest text. An existing key is never overwritten.
-
-The `config` names these inputs:
-
-- creator `owner`
-- manifest `sections` and the destination `referenceSection`
-- `manifestPath`, `renderedPath` and `referenceRoot`
-- `lineagePath`: a file, directory or list of files
-- consumer `render` function
-
-No section name has a default.
-Optional fields are `terminalDisposition` (default `accepted`) and `activeState` (default `Active`).
-The row has these keys. The audit reads the same keys.
-
-| Key | Value |
-| --- | --- |
-| `id` | The key of the row. |
-| `committed_source_path` | The committed path of the reference image. |
-| `source_sha256` | The SHA-256 of the image bytes. |
-| `generation_tool`, `generation_model`, `generation_date` | From the lineage row. |
-| `lineage_path` | The lineage file that names the image. |
-| `prompt` or `prompt_path`, and `prompt_sha256` | The inline prompt or the committed prompt file, and its SHA-256. |
-| `image_asset_id`, `source_asset_id` | The uploaded asset and the asset that the image came from. |
-| `owner`, `owner_id`, `state` | The declared creator and the active state. |
-| `creator_transfer_pending` | Always `false`. |
-| `moderation_state` | From the readback. |
-| `image_readback_receipt` | The committed path of the readback receipt. |
-| `reviewer_verdict_ids`, `reviewer_verdict_receipt`, `reviewer_verdict_anchor` | The one reviewer verdict. |
-| `rights_basis` | Always `generated_by_owner`. |
-| `disposition` | The disposition that the consumer names. |
-
-A lineage file holds text rows. Each row is `source_path = "...", tool = "...", model = "...", prompt = "..."?, date = "...", sha256 = "..."`.
-A model row names its reference with `reference_sha256` and `reference_image_asset_id`, its prompt with `model_prompt_sha256` and its verdict with `comparison_verdict_receipt`.
-
-The module reads no credential and makes no request.
 
 ### Asset audit
 
@@ -543,38 +365,13 @@ It checks receipt fields `lineage_path`, `reviewer_verdict_receipt` and `image_r
 | Read the instance tree | `Roblox.rbxm.instances(bytes)` |
 | Get the path of one instance | `Roblox.rbxm.instancePath(tree, referent)` |
 
-### Native transcripts
-
-`Roblox.nativeTranscript` keeps the exact Studio calls and captures of one retained artifact. It binds consumer-declared Studio calls to the artifact and records exactly what the native host returned.
-It does not open a Studio session and does not choose a route.
-
-| Task | Call |
-| --- | --- |
-| Plan the calls | `Roblox.nativeTranscript.prepare(binding, calls, codec)` returns a `generate.roblox.native-plan.v1` plan. Its ordered `grant` lists each request SHA-256. |
-| Run the calls | `Roblox.nativeTranscript.execute(plan, host)` spends one attempt for each call, in order. It returns a `generate.roblox.native-transcript.v1` transcript. |
-| Verify the retained bytes | `Roblox.nativeTranscript.verify(plan, transcript, readHost, caps)` returns `{ results, images }` from exact retained bytes, or refuses. |
-| Get the request bytes of one call | `Roblox.nativeTranscript.requestBytes` returns the exact bytes that the plan hashes. |
-
-- `binding` names the exact `artifactDigest` and a `studio` record that contains `studioId`.
-- Each call has a file-safe `label`, a `tool` of `execute_luau` or `screen_capture`, and `arguments`. The `studio_id` in `arguments` is the bound Studio.
-- `codec` supplies the JSON `encode` and the `sha256` of the consumer.
-- A request is the bytes `{"arguments":<encoded arguments>,"name":"<tool>"}`. Duplicates and other Studios are refused.
-
-`execute` writes each request before it calls `host.call(tool, argumentsBytes)`. It writes the tool result after the call.
-`host.writeNew` must refuse existing names. Then a second run of the same plan refuses before any call.
-A thrown call is `ambiguous`. A tool error or an undecodable result is `failed`. Both stop the transcript. Neither is retried.
-A `screen_capture` result must hold one base64 image whose PNG or JPEG signature matches its media type. Its decoded bytes are written as a separate file.
-
-`verify` recomputes the plan digest and the grant. It requires the same artifact, Studio, ordered labels, tools and request digests.
-It reads every file again. It checks file hashes and the limits `caps.requestBytes`, `responseBytes` and `imageBytes`.
-It requires each image file to equal its decoded response.
-It refuses a missing, stopped or reordered call. It refuses an image that the transcript repeats or that `caps.excludedImages` names.
-Hashes bind retained bytes. They do not prove that the host ran the call truthfully.
-
-
 ## Media
 
 Media measures, converts and renders audio for review.
+
+WAVE measurement supports 16-, 24- and 32-bit PCM and 32-bit float samples. It refuses incomplete
+format chunks and non-finite samples. Probe metadata requires a finite nonnegative duration,
+a codec name, a positive whole sample rate and a positive whole channel count.
 
 | Task | Call |
 | --- | --- |
@@ -596,24 +393,9 @@ The consumer sets thresholds, recipes and acceptance criteria. A measurement is 
 
 ---
 
-## Content, process and reviewer adapters
+## Process tools
 
-These adapters bind a content compiler, a process tool and a reviewer to a stage.
-
-| Task | Call |
-| --- | --- |
-| Compile structured content with a compiler that the consumer supplies | `Content.compile` |
-| Run a declared native audio tool or another tool | `Lute.process.run` |
-| Select the reviewer executable from the configuration or the named environment variable | `Agent.reviewerCli.resolve` |
-| Read one reviewer event stream with one thread and one terminal answer | `Agent.reviewerStream.parse` |
-| Turn exactly one reviewer stream into a decision draft bound to the packet | `Agent.reviewerStream.decisions` |
-
-- `Content.compile` requires the source, schema and tool identity from the consumer. It returns the artifact of the compiler.
-- `Lute.process.run` binds declared tools. A successful execution does not prove audibility.
-- `Agent.reviewerCli.resolve` selects only the consumer configuration or the named environment variable, through the supplied readers.
-- `Agent.reviewerStream.parse` and `decisions` normalize an event contract that the consumer declares. `decisions` accepts exactly one stream and rejects malformed verdicts.
-
-These adapters do not prove independence. The consumer selects the vendor.
+`Lute.process.run` runs a consumer-declared tool and binds its output bytes, tool identity and invocation to a stage outcome. The consumer supplies the command, paths and acceptance. A successful process is not proof of content quality.
 
 ## Image lane
 
@@ -623,9 +405,6 @@ Acceptance follows [the review contract of the brief](#generatebrief).
 
 | Task | Call |
 | --- | --- |
-| Derive recipe data from a brief | `Image.request.fromBrief` |
-| Decode recipe data | `Image.request.decode` |
-| Bind recipe data to the stages of a plan | `Image.request.bindings` |
 | Encode a recipe document | `Image.request.encode` |
 | Route the declared stages to tools | `Image.host.create` |
 | Invoke the provider once | `Image.provider.runStage` |
@@ -643,33 +422,19 @@ Acceptance follows [the review contract of the brief](#generatebrief).
 | Resize to a declared size | `Image.deliver.run` |
 | Stage a blind review packet | `Image.review.stage` and `Image.review.runStage` |
 | Start from the default blindness configuration | `Image.review.DEFAULT_CONFIG` |
-| Summarize the gates and transform facts of a run | `Image.lane.summary` |
 | Copy, convert or encode pixels | [Pixel helpers](#pixel-helpers) |
 
-### Request and execution
+### Execution
 
-Request and execution bind recipe data to plan stages and run those stages.
+The consumer builds typed `HostBinding` values for the stages it declares in a Generate plan.
+`Image.host.create` routes those stages and refuses mutating stages; it has no publication authority.
+`Image.provider.runStage` spends one invocation and preserves references while confining output paths.
+`Image.postprocess.runStage` pins the script bytes and refuses an existing output, silent or nonzero execution and rewritten input.
+The consumer owns recipe loading, schema validation and transform algorithms.
 
-- `Image.request.fromBrief`, `decode`, `bindings` and `encode` bind recipe data to exactly declared, non-mutating plan stages.
-- `Image.host.create` routes those stages. It has no publication authority.
-- `Image.provider.runStage` spends one invocation that the consumer selects. It preserves references and confines output paths. It refuses a missing or mismatched reply.
-- `Image.postprocess.runStage` pins the script bytes. It refuses an existing output, a silent or nonzero execution and a rewritten input.
-
-Each recipe artifact declares `id`, `slug`, `role`, `tiles`, `transparentBackground` and `singleSubject`. It can also declare `unlit`, `dark`, `pairedGroup`, `hueBand`, `limitBrightMaxima`, `declaredWidth`, `declaredHeight` and `registerTarget`. The [checks](#checks) read these declarations.
-
-Request bindings accept the kind `postprocess` with the existing `Postprocess.Transform` fields:
-
-- the exact artifact ID and the supported transform kind
-- the pinned script path and digest
-- the input role and paths
-- the immutable output path
-- string parameters
-- a positive whole attempt number
-
-The binding keeps those identities and optional rights. The consumer owns the transform algorithm.
-The adapter refuses undeclared bindings and mutating stages before host execution.
-Recipe decoders accept `unknown`. Binding values remain `unknown` until the adapter checks them.
-Before binding, the adapter checks nested provider requests, review requests and register targets against their declared field shapes. Adapters keep their semantic checks.
+`Image.request.encode(config, document)` encodes consumer data with sorted object keys and a final newline.
+The config supplies `indent` and a scalar `serialize` function. Encoding grants no execution or acceptance.
+Use `QaDeclaration` for image checks and `HostBinding` for execution; there is no intermediate recipe representation.
 Read transform bytes and typed facts only after a check that `ok` is `true`.
 
 ### Thresholds
@@ -778,7 +543,6 @@ Transforms change pixels deterministically. Review prepares blind evidence for o
 - A provider `Request` names its output `group`. The `group` is a collection name in lower kebab-case. It becomes a directory under the output root and the first part of the candidate identity.
 - Consumer codecs implement container decoding and encoding.
 - `Image.review.stage` binds exact evidence views. It rejects evidence that reveals the producer, prompt or previous verdict.
-- `Image.lane.summary` records the gates and the transform facts.
 
 Image checks and transforms do not supply a review decision.
 Review identity strings alone do not prove that an independent human or agent reviewed the content.

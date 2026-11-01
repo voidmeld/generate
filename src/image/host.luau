@@ -49,6 +49,8 @@ export type Tool = { tool: string, toolVersion: string, adapter: string }
 
 export type Tools = { matte: Tool, register: Tool, deliver: Tool }
 
+type Converted = { bytes: string, tool: Tool, fingerprint: string, metadata: { [string]: unknown } }
+
 export type Options = {
 	name: string,
 	deps: Deps,
@@ -148,7 +150,7 @@ local function create(options: Options): Generate.Host
 			if binding.kind == "provider" then
 				local outcome = Provider.runStage(options.provider, deps, binding.request, binding.attempt)
 				if binding.delivery and outcome.status == "returned" then
-					for _, artifact in (outcome.output.artifacts or {}) :: { Generate.Artifact } do
+					for _, artifact in outcome.output.artifacts or {} do
 						artifact.semanticId = brief.delivery.semanticId
 					end
 				end
@@ -156,7 +158,7 @@ local function create(options: Options): Generate.Host
 			elseif binding.kind == "postprocess" then
 				local outcome = Postprocess.runStage(options.postprocess, deps, binding.transform, artifacts)
 				if binding.delivery and outcome.status == "returned" then
-					for _, artifact in (outcome.output.artifacts or {}) :: { Generate.Artifact } do
+					for _, artifact in outcome.output.artifacts or {} do
 						artifact.semanticId = brief.delivery.semanticId
 					end
 				end
@@ -176,25 +178,26 @@ local function create(options: Options): Generate.Host
 			if source == nil or source.locator == nil then
 				return { status = "rejected", detail = ("%s source %s is absent"):format(label, transform.sourceId) }
 			end
-			local found = source :: Generate.Artifact
+			local found = source
+			local locator = source.locator
 
-			local result: Matte.Result | Register.Result | Deliver.Result
-			local tool: Tool
-			local fingerprint: string
-			local metadata: { [string]: unknown }
-			if label == "matte" then
-				tool = options.tools.matte
+			local converted: Converted
+			if transform.kind == "matte" then
 				if options.matteParameters == nil then
 					return { status = "rejected", detail = "matte requires the consumer to declare matteParameters" }
 				end
-				result = Matte.run(options.codec, deps.read(found.locator :: string), options.matteParameters)
-				if result.ok then
-					fingerprint = Generate.fingerprint(result.parameters)
+				local result = Matte.run(options.codec, deps.read(locator), options.matteParameters)
+				if not result.ok then
+					return { status = "rejected", detail = ("%s source %s: %s"):format(label, found.id, result.reason) }
 				end
-			elseif label == "register" then
-				tool = options.tools.register
-				local registered = transform :: RegisterBinding
-				local declared = registered.target
+				converted = {
+					bytes = result.bytes,
+					tool = options.tools.matte,
+					fingerprint = Generate.fingerprint(result.parameters),
+					metadata = { sourceSha256 = found.digest, parameters = result.parameters },
+				}
+			elseif transform.kind == "register" then
+				local declared = transform.target
 				if
 					type(declared) ~= "table"
 					or type(declared.hue) ~= "number"
@@ -219,26 +222,43 @@ local function create(options: Options): Generate.Host
 				then
 					return { status = "rejected", detail = "register target carries no percentile targets" }
 				end
-				fingerprint = Generate.fingerprint(target)
-				result = Register.run(registerConfig, deps.read(found.locator :: string), target)
-			else
-				tool = options.tools.deliver
-				local delivered = transform :: DeliverBinding
-				result = Deliver.run(
-					deliverConfig,
-					deps.read(found.locator :: string),
-					delivered.declaredWidth,
-					delivered.declaredHeight
-				)
-				if result.ok then
-					fingerprint = Generate.fingerprint(result.parameters)
+				local fingerprint = Generate.fingerprint(target)
+				local result = Register.run(registerConfig, deps.read(locator), target)
+				if not result.ok then
+					return { status = "rejected", detail = ("%s source %s: %s"):format(label, found.id, result.reason) }
 				end
+				converted = {
+					bytes = result.bytes,
+					tool = options.tools.register,
+					fingerprint = fingerprint,
+					metadata = {
+						preFacts = result.preFacts,
+						postFacts = result.postFacts,
+						sha256 = result.sha256,
+						parameters = result.parameters,
+					},
+				}
+			else
+				local result =
+					Deliver.run(deliverConfig, deps.read(locator), transform.declaredWidth, transform.declaredHeight)
+				if not result.ok then
+					return { status = "rejected", detail = ("%s source %s: %s"):format(label, found.id, result.reason) }
+				end
+				converted = {
+					bytes = result.bytes,
+					tool = options.tools.deliver,
+					fingerprint = Generate.fingerprint(result.parameters),
+					metadata = {
+						resampled = result.resampled,
+						preFacts = result.preFacts,
+						postFacts = result.postFacts,
+						sha256 = result.sha256,
+						parameters = result.parameters,
+					},
+				}
 			end
-			if not result.ok then
-				return { status = "rejected", detail = ("%s source %s: %s"):format(label, found.id, result.reason) }
-			end
-			deps.write(transform.outputPath, result.bytes)
-			local measured = Measure.measure(options.measure, result.bytes)
+			deps.write(transform.outputPath, converted.bytes)
+			local measured = Measure.measure(options.measure, converted.bytes)
 			if not measured.ok then
 				return {
 					status = "rejected",
@@ -250,39 +270,17 @@ local function create(options: Options): Generate.Host
 			if transform.delivery then
 				artifact.semanticId = brief.delivery.semanticId
 			end
-			if label == "matte" then
-				local successful = result :: Matte.Success
-				metadata = {
-					sourceSha256 = found.digest,
-					outputSha256 = artifact.digest,
-					parameters = successful.parameters,
-				}
-			elseif label == "register" then
-				local successful = result :: Register.Success
-				metadata = {
-					preFacts = successful.preFacts,
-					postFacts = successful.postFacts,
-					sha256 = successful.sha256,
-					parameters = successful.parameters,
-				}
-			else
-				local successful = result :: Deliver.Success
-				metadata = {
-					resampled = successful.resampled,
-					preFacts = successful.preFacts,
-					postFacts = successful.postFacts,
-					sha256 = successful.sha256,
-					parameters = successful.parameters,
-				}
+			if transform.kind == "matte" then
+				converted.metadata.outputSha256 = artifact.digest
 			end
-			local invocation, derivation = derived(tool, artifact, found, fingerprint)
+			local invocation, derivation = derived(converted.tool, artifact, found, converted.fingerprint)
 			return {
 				status = "returned",
 				output = {
 					artifacts = { artifact },
 					invocations = { invocation },
 					derivations = { derivation },
-					metadata = metadata,
+					metadata = converted.metadata,
 				},
 			}
 		end,

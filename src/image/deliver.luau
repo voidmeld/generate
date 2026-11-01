@@ -52,8 +52,10 @@ end
 
 export type Contribution = { index: number, weight: number }
 
+local createWeights: (number, { Contribution }?) -> { { Contribution } } = table.create
+
 local function axisWeights(srcSize: number, dstSize: number): ({ { Contribution } }, string)
-	local weights = table.create(dstSize)
+	local weights = createWeights(dstSize)
 	if dstSize == srcSize then
 		for index = 0, dstSize - 1 do
 			weights[index + 1] = { { index = index, weight = 1 } }
@@ -178,7 +180,7 @@ local function run(config: Config, bytes: string, declaredWidth: number, declare
 	if not decoded.ok then
 		return { ok = false, reason = decoded.reason }
 	end
-	local image = decoded.image :: Codec.Image
+	local image = decoded.image
 	if image.channels ~= 3 and image.channels ~= 4 then
 		return { ok = false, reason = "deliver requires an RGB or RGBA PNG" }
 	end

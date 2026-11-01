@@ -1,18 +1,16 @@
 --!strict
 
 local AssetAudit = require "./roblox/asset-audit"
-local AssetPublication = require "./roblox/asset-publication"
 local AssetReadback = require "./roblox/asset-readback"
-local ReferenceProvenance = require "./roblox/reference-provenance"
 local Delivery = require "./roblox/delivery"
-local NativeTranscript = require "./roblox/native-transcript"
 local PermissionGrant = require "./roblox/permission-grant"
-local PublicationRecord = require "./roblox/publication-record"
+local Destination = require "./roblox/destination"
 local Rbxm = require "./roblox/rbxm"
 local Units = require "./roblox/units"
 local PermissionRequestModule = require "./roblox/permission-request"
 local Wire = require "./roblox/wire"
 
+export type AssetAuditFiles = AssetAudit.Files
 export type AssetAuditConfig = AssetAudit.Config
 export type AssetAuditInput = AssetAudit.Input
 export type AssetAuditReference = AssetAudit.Reference
@@ -21,13 +19,6 @@ export type AssetReadbackOptions = AssetReadback.Options
 export type AssetReadbackOwner = AssetReadback.Owner
 export type AssetRecord = AssetReadback.Record
 export type AssetCensus = AssetReadback.Census
-export type ReferenceCodecs = ReferenceProvenance.Codecs
-export type ReferenceRowValue = ReferenceProvenance.RowValue
-export type ReferenceConfig = ReferenceProvenance.Config
-export type ReferenceFiles = ReferenceProvenance.Files
-export type ReferenceDraft = ReferenceProvenance.ReferenceDraft
-export type ReferenceOutcome = ReferenceProvenance.Outcome
-export type ReferenceSource = ReferenceProvenance.Source
 export type DeliveryAuthority = Delivery.Authority
 export type DeliveryAttributeInstance = Delivery.AttributeInstance
 export type DeliveryAttributeJson = Delivery.AttributeJson
@@ -45,43 +36,12 @@ export type DeliveryRow = Delivery.Row
 export type DeliveryQueueResult = Delivery.QueueResult
 export type DeliveryNativeHost = Delivery.NativeHost
 export type DeliveryNativeRequest = Delivery.NativeRequest
-export type NativeBinding = NativeTranscript.Binding
-export type NativeCallDraft = NativeTranscript.CallDraft
-export type NativeCodec = NativeTranscript.Codec
-export type NativeBoundPlan = NativeTranscript.BoundPlan
-export type NativeTranscriptRecord = NativeTranscript.Transcript
-export type NativeExecuteHost = NativeTranscript.ExecuteHost
-export type NativeReadHost = NativeTranscript.ReadHost
-export type NativeCaps = NativeTranscript.Caps
-export type NativeVerified = NativeTranscript.Verified
 export type PermissionAuthorityOptions = PermissionGrant.AuthorityOptions
 export type PermissionCredential = PermissionGrant.Credential
 export type PermissionAssignedRole = PermissionGrant.AssignedRole
-export type PermissionAttemptResult = PermissionGrant.AttemptResult
-export type PermissionReceipt = PermissionGrant.Receipt
-export type PermissionChunk = PermissionGrant.Chunk
 export type PermissionChunkOutcome = PermissionGrant.ChunkOutcome
 export type PermissionAuthorityReceipt = PermissionGrant.AuthorityReceipt
-export type PermissionDestination = PermissionGrant.Destination
-export type PermissionPartition = PermissionGrant.Partition
 export type PermissionPatch = PermissionGrant.Patch
-export type PermissionPrepared = PermissionGrant.Prepared
-export type PermissionReceiptStore = PermissionGrant.ReceiptStore
-export type PermissionTerminal = PermissionGrant.Terminal
-export type PermissionTransaction = PermissionGrant.Transaction
-export type PublicationAccessClosure = PublicationRecord.AccessClosure
-export type PublicationCollisionMode = PublicationRecord.CollisionMode
-export type PublicationCreator = PublicationRecord.Creator
-export type PublicationDependencyGrant = PublicationRecord.DependencyGrant
-export type PublicationDestination = PublicationRecord.DestinationFields
-export type PublicationDestinationDraft = PublicationRecord.DestinationDraft
-export type PublicationFacts = PublicationRecord.Facts
-export type PublicationGrantStatus = PublicationRecord.GrantStatus
-export type PublicationMeasurements = PublicationRecord.Measurements
-export type PublicationRefusalReason = PublicationRecord.RefusalReason
-export type PublicationRequestDraft = PublicationRecord.RequestDraft
-export type PublicationUniverseGrant = PublicationRecord.UniverseGrant
-export type PublicationVisibility = PublicationRecord.Visibility
 export type RbxmClass = Rbxm.Class
 export type RbxmDocument = Rbxm.Document
 export type RbxmInstance = Rbxm.Instance
@@ -95,17 +55,10 @@ export type PermissionRequestResult = PermissionRequestModule.Result
 export type CloudRequest = Wire.AuthorizedRequest
 export type CloudResponse = Wire.Response
 export type CloudSend = Wire.SendAuthorized
-export type AssetPublicationAdapter = AssetPublication.Adapter
-export type AssetPublicationGrant = AssetPublication.Grant
-export type AssetPublicationOperations = AssetPublication.Operations
-export type AssetPublicationOptions = AssetPublication.Options
-export type AssetPublicationRequest = AssetPublication.PublicationRequest
-export type AssetPublicationStage = AssetPublication.Stage
-export type AssetPublicationTransaction = AssetPublication.Transaction
-
+export type Destination = Destination.DestinationFields
+export type DestinationDraft = Destination.DestinationDraft
 return {
 	assetAudit = AssetAudit,
-	assetPublication = AssetPublication,
 	assetReadback = {
 		SOURCES = AssetReadback.SOURCES,
 		UNOBSERVABLE = AssetReadback.UNOBSERVABLE,
@@ -113,15 +66,14 @@ return {
 		census = AssetReadback.census,
 	},
 	delivery = Delivery,
-	nativeTranscript = NativeTranscript,
 	permissionGrant = PermissionGrant,
-	publicationRecord = PublicationRecord,
+	destination = Destination.create,
+	readDestination = Destination.read,
 	rbxm = {
 		read = Rbxm.read,
 		instances = Rbxm.instances,
 		instancePath = Rbxm.instancePath,
 		isBinary = Rbxm.isBinary,
 	},
-	referenceProvenance = { record = ReferenceProvenance.record },
 	units = Units,
 }

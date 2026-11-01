@@ -44,7 +44,7 @@ local function distance(image: Codec.Image, source: (number, number) -> boolean)
 	return out
 end
 
-local function nearest(image: Codec.Image, distances: { number }, target: number): (number?, number?, number?)
+local function nearestOffset(image: Codec.Image, distances: { number }, target: number): number?
 	local width = image.width
 	local best = distances[target]
 	if best == 65535 or best == 0 then
@@ -69,10 +69,7 @@ local function nearest(image: Codec.Image, distances: { number }, target: number
 		index = nextIndex
 		best -= 1
 	end
-	local base = (index - 1) * 4
-	return buffer.readu8(image.pixels, base),
-		buffer.readu8(image.pixels, base + 1),
-		buffer.readu8(image.pixels, base + 2)
+	return (index - 1) * 4
 end
 
 local function oneBit(image: Codec.Image): boolean
@@ -104,11 +101,9 @@ local function apply(image: Codec.Image, parameters: Parameters): Codec.Image
 	for index = 0, width * height - 1 do
 		local base = index * 4
 		if buffer.readu8(image.pixels, base + 3) == 0 then
-			local r, g, b = nearest(image, opaqueDistance, index + 1)
-			if r ~= nil then
-				buffer.writeu8(pixels, base, r)
-				buffer.writeu8(pixels, base + 1, g :: number)
-				buffer.writeu8(pixels, base + 2, b :: number)
+			local offset = nearestOffset(image, opaqueDistance, index + 1)
+			if offset ~= nil then
+				buffer.copy(pixels, base, image.pixels, offset, 3)
 			end
 		end
 	end
@@ -122,11 +117,9 @@ local function apply(image: Codec.Image, parameters: Parameters): Codec.Image
 			(opacity > 0 and opacity < 255)
 			or (opacity == 255 and transparentDistance[index + 1] <= parameters.boundaryDistance)
 		then
-			local r, g, b = nearest(image, interiorDistance, index + 1)
-			if r ~= nil then
-				buffer.writeu8(pixels, base, r)
-				buffer.writeu8(pixels, base + 1, g :: number)
-				buffer.writeu8(pixels, base + 2, b :: number)
+			local offset = nearestOffset(image, interiorDistance, index + 1)
+			if offset ~= nil then
+				buffer.copy(pixels, base, image.pixels, offset, 3)
 			end
 		end
 	end
@@ -149,7 +142,7 @@ local function run(codec: Codec.Codec, bytes: string, parameters: Parameters): R
 	if not decoded.ok then
 		return { ok = false, reason = decoded.reason }
 	end
-	local image = decoded.image :: Codec.Image
+	local image = decoded.image
 	if image.channels ~= 4 then
 		return { ok = false, reason = "matte requires an RGBA PNG" }
 	end
