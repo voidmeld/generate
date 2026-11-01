@@ -158,7 +158,7 @@ local function bind(
 			)
 			continue
 		end
-		local selected = pose :: EvidencePose
+		local selected = pose
 		if seen[selected.id] then
 			fault(REASONS.DUPLICATE, selected.id, index, ("pose %s is offered twice"):format(selected.id))
 			continue

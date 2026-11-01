@@ -40,6 +40,15 @@ local RIGHTS_FACTS: { [string]: boolean } = {
 	consent = true,
 }
 
+local REVIEW_FIELDS: { [string]: boolean } = {
+	rubric = true,
+	rubricFingerprint = true,
+	rubricVersion = true,
+	views = true,
+	blindness = true,
+	independence = true,
+}
+
 local function nonempty(value: unknown, label: string): string
 	if type(value) ~= "string" or value == "" then
 		error("Generate brief " .. label .. " must be a non-empty string", 3)
@@ -93,8 +102,12 @@ local function create(draft: BriefDraft): Brief
 	if independence ~= "required" and independence ~= "optional" then
 		error("Generate brief review.independence must be required or optional", 2)
 	end
-	if (draft.review :: typeof(draft.review) & { secondaryAcceptance: unknown? }).secondaryAcceptance ~= nil then
-		error("Generate no longer supports review.secondaryAcceptance; the review decision must approve", 2)
+	local reviewFields: unknown = draft.review
+	assert(type(reviewFields) == "table")
+	for key in reviewFields do
+		if type(key) ~= "string" or not REVIEW_FIELDS[key] then
+			error(("Generate brief review carries unknown field %s"):format(tostring(key)), 2)
+		end
 	end
 	if draft.provenance ~= nil and type(draft.provenance) ~= "table" then
 		error("Generate brief provenance must be a contract table", 2)
@@ -124,6 +137,16 @@ local function create(draft: BriefDraft): Brief
 		table.insert(requiredFacts, name)
 	end
 	table.sort(requiredFacts)
+	local constraints: { [string]: unknown } = {}
+	if draft.constraints ~= nil then
+		assert(type(draft.constraints) == "table")
+		for key, value in draft.constraints do
+			if type(key) ~= "string" then
+				error("Generate brief constraints require string keys", 2)
+			end
+			constraints[key] = value
+		end
+	end
 	return {
 		schemaVersion = SCHEMA_VERSION,
 		id = nonempty(draft.id, "id"),
@@ -133,7 +156,7 @@ local function create(draft: BriefDraft): Brief
 			style = draft.intent.style,
 			description = draft.intent.description,
 		},
-		constraints = table.clone((draft.constraints or {}) :: { [string]: unknown }),
+		constraints = constraints,
 		review = {
 			rubric = {
 				id = nonempty(draft.review.rubric, "review.rubric"),

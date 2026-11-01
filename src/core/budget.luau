@@ -90,8 +90,8 @@ local function evaluate(draft: QuotaDraft): QuotaReport
 		end
 	end
 	local kindOutcome: QuotaKindOutcome? = nil
-	if draft.kind ~= nil then
-		local declared = draft.kind :: QuotaKind
+	local declared = draft.kind
+	if declared ~= nil then
 		if declared.name == "" then
 			error(("Generate quota subject %q declares an unnamed kind"):format(draft.subject), 2)
 		end
@@ -102,11 +102,12 @@ local function evaluate(draft: QuotaDraft): QuotaReport
 			error(("Generate quota subject %q allows no value for kind %q"):format(draft.subject, declared.name), 2)
 		end
 		local allowed = kindAllowed(declared.kind, declared.allowedKinds)
-		kindOutcome = {
+		local outcome: QuotaKindOutcome = {
 			name = declared.name,
 			kind = declared.kind,
 			allowed = allowed,
 		}
+		kindOutcome = outcome
 		if not allowed then
 			table.insert(overruns, declared.name .. ":" .. declared.kind)
 		end

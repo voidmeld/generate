@@ -4,8 +4,10 @@ local Test = require "./harness"
 
 local describe, it, expect = Test.describe, Test.it, Test.expect
 
+local Canonical = require "../src/core/canonical"
 local Bracket = require "../src/core/evidence-bracket"
 local Generate = require "../src/core"
+local Publication = require "../src/core/publication"
 local Revision = require "../src/core/revision"
 local Host = require "../src/host"
 
@@ -308,9 +310,45 @@ describe("Generate briefs and plans", function()
 		end):toThrow()
 	end)
 
+	it("copies typed plain records without sharing nested mutable state", function()
+		local original = { nested = { value = 1 }, labels = { "first", "second" } }
+		local copied = Canonical.copy(original)
+		copied.nested.value = 2
+		copied.labels[1] = "changed"
+		expect(original.nested.value):toBe(1)
+		expect(original.labels[1]):toBe "first"
+		expect(copied.nested.value):toBe(2)
+		expect(function()
+			Canonical.copy(setmetatable({}, {
+				__index = function()
+					error "executable metadata"
+				end,
+			}))
+		end):toThrow "plain tables"
+	end)
+
+	it("refuses non-string publication descriptor and constraint keys", function()
+		expect(function()
+			Publication.destination({ adapter = "fixture", descriptor = { "unnamed" } }, false)
+		end):toThrow "descriptor requires string keys"
+		expect(function()
+			Generate.brief {
+				id = "fixture.constraints",
+				kind = "image",
+				intent = { role = "fixture" },
+				constraints = { "unnamed" },
+				review = { rubric = "fixture", rubricFingerprint = "fixture", views = { "front" } },
+				delivery = { semanticId = "fixture", target = "local" },
+			}
+		end):toThrow "constraints require string keys"
+	end)
+
 	it("rejects cyclic and non-finite canonical state", function()
 		local cyclic: { [string]: unknown } = {}
 		cyclic.self = cyclic
+		expect(function()
+			Canonical.copy(cyclic)
+		end):toThrow "cycles"
 		expect(function()
 			Generate.fingerprint(cyclic)
 		end):toThrow()
@@ -562,10 +600,10 @@ describe("Generate review packets and review resolution", function()
 	end)
 end)
 
-describe("review contract retirement", function()
-	it("refuses a retired score-based acceptance contract instead of silently accepting it", function()
+describe("review contract fields", function()
+	it("refuses an unknown acceptance field", function()
 		expect(function()
-			Generate.brief({
+			Generate.brief {
 				id = "fixture.retired",
 				kind = "image",
 				intent = { role = "fixture" },
@@ -576,8 +614,8 @@ describe("review contract retirement", function()
 					secondaryAcceptance = { minScore = 0, reviewers = 1 },
 				},
 				delivery = { semanticId = "fixture", target = "local" },
-			} :: Generate.BriefDraft)
-		end):toThrow "review decision must approve"
+			}
+		end):toThrow "review carries unknown field secondaryAcceptance"
 	end)
 end)
 

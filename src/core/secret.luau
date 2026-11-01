@@ -23,21 +23,20 @@ end
 local function validate(value: unknown, label: string)
 	local visiting: { [unknown]: boolean } = {}
 	local function visit(current: unknown, path: string)
-		local kind = type(current)
-		if kind == "number" then
-			local number = current :: number
+		if type(current) == "number" then
+			local number = current
 			if number ~= number or number == math.huge or number == -math.huge then
 				error(("%s contains a non-finite number at %s"):format(label, path), 3)
 			end
 			return
 		end
-		if kind == "nil" or kind == "boolean" or kind == "string" then
+		if current == nil or type(current) == "boolean" or type(current) == "string" then
 			return
 		end
-		if kind ~= "table" then
+		if type(current) ~= "table" then
 			error(("%s contains executable or host value at %s"):format(label, path), 3)
 		end
-		local object = current :: { [unknown]: unknown }
+		local object = current
 		if visiting[object] then
 			error(("%s contains a cycle at %s"):format(label, path), 3)
 		end

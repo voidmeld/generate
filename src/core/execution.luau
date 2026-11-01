@@ -96,6 +96,12 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 	local started = host.now()
 	local records: { StageRecord } = {}
 	local compensations: { CompensationRecord } = {}
+	local function appendRecord(record: StageRecord)
+		table.insert(records, record)
+	end
+	local function appendCompensation(record: CompensationRecord)
+		table.insert(compensations, record)
+	end
 	local artifacts: { Artifact } = {}
 	local packets: { ReviewPacket } = {}
 	local decisions: { ReviewDecision } = {}
@@ -335,7 +341,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 	local function appendNotRun(after: number, detail: string)
 		for later = after + 1, #plan.stages do
 			local skipped = plan.stages[later]
-			table.insert(records, {
+			appendRecord {
 				id = skipped.id,
 				operation = skipped.operation,
 				status = "not_run",
@@ -350,36 +356,37 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 				idempotencyKey = plan.fingerprint .. ":" .. skipped.id,
 				costMicros = 0,
 				metadata = {},
-			})
+			}
 		end
 	end
 
 	local function compensate()
 		for index = #completedMutations, 1, -1 do
 			local entry = completedMutations[index]
-			if host.compensate == nil then
-				table.insert(compensations, {
+			local compensateStage = host.compensate
+			if compensateStage == nil then
+				appendCompensation {
 					stageId = entry.stage.id,
 					status = "faulted",
 					detail = "host has no compensation operation",
-				})
+				}
 				continue
 			end
-			local ok, outcome = pcall(host.compensate, entry.stage, entry.token, authority)
+			local ok, outcome = pcall(compensateStage, entry.stage, entry.token, authority)
 			if not ok then
-				table.insert(compensations, {
+				appendCompensation {
 					stageId = entry.stage.id,
 					status = "faulted",
 					detail = tostring(outcome),
-				})
+				}
 			elseif outcome.status == "returned" then
-				table.insert(compensations, { stageId = entry.stage.id, status = "returned" })
+				appendCompensation { stageId = entry.stage.id, status = "returned" }
 			else
-				table.insert(compensations, {
+				appendCompensation {
 					stageId = entry.stage.id,
 					status = "faulted",
 					detail = outcome.detail,
-				})
+				}
 			end
 		end
 	end
@@ -418,7 +425,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 			end
 		end
 		if #missing > 0 then
-			table.insert(records, {
+			appendRecord {
 				id = stage.id,
 				operation = stage.operation,
 				status = "unsupported",
@@ -433,7 +440,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 				idempotencyKey = idempotencyKey,
 				costMicros = 0,
 				metadata = {},
-			})
+			}
 			table.insert(limitations, limitationFor(stage, "missing " .. table.concat(missing, ", ")))
 			terminal = "unsupported"
 			appendNotRun(position, "an earlier stage was unsupported")
@@ -442,19 +449,20 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 		end
 
 		local stageStarted = host.now()
-		local ok, outcome = pcall(host.runStage, stage, brief, stageInputs, authority, {
+		local ok, result = pcall(host.runStage, stage, brief, stageInputs, authority, {
 			idempotencyKey = idempotencyKey,
 		})
 		local duration = micros(host.now() - stageStarted)
-		if not ok then
-			outcome = { status = "faulted", detail = tostring(outcome) }
-		end
+		local outcome: Types.StageOutcome = if ok
+			then result
+			else { status = "faulted", detail = tostring(result), rollbackToken = nil }
 		if outcome.status ~= "returned" then
 			local status: "rejected" | "faulted" = if outcome.status == "rejected" then "rejected" else "faulted"
-			if stage.mutation and outcome.rollbackToken ~= nil and outcome.rollbackToken ~= "" then
-				table.insert(completedMutations, { stage = stage, token = outcome.rollbackToken :: string })
+			local rollbackToken = outcome.rollbackToken
+			if stage.mutation and rollbackToken ~= nil and rollbackToken ~= "" then
+				table.insert(completedMutations, { stage = stage, token = rollbackToken })
 			end
-			table.insert(records, {
+			appendRecord {
 				id = stage.id,
 				operation = stage.operation,
 				status = status,
@@ -471,7 +479,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 				costMicros = 0,
 				metadata = {},
 				economics = { wallSeconds = duration / 1e6 },
-			})
+			}
 			terminal = if status == "rejected" then "rejected" else "failed"
 			appendNotRun(position, "an earlier stage did not return")
 			compensate()
@@ -547,7 +555,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 					)
 					break
 				end
-				local value = thrown :: Derivation
+				local value = thrown
 				local target = producedById[value.artifactId]
 				if target == nil then
 					contractFault = ("Generate stage %q derived %q without producing it"):format(
@@ -572,10 +580,10 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 				end
 				local parentFault: string? = nil
 				for _, parent in value.parents do
-					if parent.artifactId == nil then
+					local parentId = parent.artifactId
+					if parentId == nil then
 						continue
 					end
-					local parentId = parent.artifactId :: string
 					if artifactIds[parentId] then
 						local known = artifactById[parentId]
 						if parent.artifactDigest ~= nil and parent.artifactDigest ~= known.digest then
@@ -624,7 +632,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 					tostring(thrown)
 				)
 			else
-				local value = thrown :: ReviewPacket
+				local value = thrown
 				if packetIds[value.id] then
 					contractFault = ("Generate stage %q repeated review packet identity %q"):format(stage.id, value.id)
 				elseif
@@ -685,7 +693,7 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 					)
 					break
 				end
-				local value = thrown :: ReviewDecision
+				local value = thrown
 				if not packetIds[value.packetId] and value.packetId ~= knownPacket then
 					contractFault = ("Generate stage %q reported a decision on unknown review packet %q"):format(
 						stage.id,
@@ -700,20 +708,21 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 		if stage.mutation and (output.rollbackToken == nil or output.rollbackToken == "") then
 			contractFault = ("Generate mutation stage %q returned without a rollback token"):format(stage.id)
 		end
-		if contractFault ~= nil then
+		local fault: string? = contractFault
+		if fault ~= nil then
 			for _, value in stageDerivations do
 				derivationByArtifactId[value.artifactId] = nil
 			end
 			if stage.mutation and output.rollbackToken ~= nil and output.rollbackToken ~= "" then
 				table.insert(completedMutations, { stage = stage, token = output.rollbackToken })
 			end
-			table.insert(records, {
+			appendRecord {
 				id = stage.id,
 				operation = stage.operation,
 				status = "faulted",
 				startedMicros = micros(stageStarted - started),
 				durationMicros = duration,
-				detail = contractFault,
+				detail = fault,
 				inputArtifacts = stageInputs,
 				artifacts = {},
 				invocations = {},
@@ -723,8 +732,8 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 				costMicros = 0,
 				metadata = {},
 				economics = { wallSeconds = duration / 1e6 },
-			})
-			table.insert(limitations, limitationFor(stage, contractFault))
+			}
+			table.insert(limitations, limitationFor(stage, fault))
 			terminal = "failed"
 			appendNotRun(position, "an earlier stage violated the host contract")
 			compensate()
@@ -745,9 +754,10 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 		end
 		costMicros += actualCost
 		if stage.mutation then
-			table.insert(completedMutations, { stage = stage, token = output.rollbackToken :: string })
+			table.insert(completedMutations, { stage = stage, token = assert(output.rollbackToken) })
 		end
-		table.insert(records, {
+		local metadata: Types.Metadata = output.metadata or {}
+		appendRecord {
 			id = stage.id,
 			operation = stage.operation,
 			status = "returned",
@@ -755,16 +765,16 @@ local function executeInternal(brief: Brief, plan: Plan, host: Host, authority: 
 			durationMicros = duration,
 			inputArtifacts = stageInputs,
 			artifacts = table.clone(produced),
-			invocations = table.clone(output.invocations or {}),
+			invocations = table.clone(invocations),
 			reviewPacket = stagePacket,
 			decisions = table.clone(stageDecisions),
 			derivations = table.clone(stageDerivations),
 			rollbackToken = output.rollbackToken,
 			idempotencyKey = idempotencyKey,
 			costMicros = actualCost,
-			metadata = table.clone(output.metadata or {}),
+			metadata = table.clone(metadata),
 			economics = mergeEconomics(output.economics, duration),
-		})
+		}
 	end
 
 	local reviews = resolveReviews()
@@ -905,7 +915,7 @@ local function continueReview(brief: Brief, plan: Plan, receipt: Receipt, drafts
 	if #drafts == 0 then
 		error("Generate continueReview requires at least one review decision", 2)
 	end
-	local source = Canonical.copy(receipt) :: Receipt
+	local source = Canonical.copy(receipt)
 
 	local packetIds: { [string]: boolean } = {}
 	for _, packet in source.reviewPackets do
@@ -929,9 +939,10 @@ local function continueReview(brief: Brief, plan: Plan, receipt: Receipt, drafts
 		end
 		local copy = table.clone(record)
 		copy.decisions = table.clone(record.decisions)
-		if record.reviewPacket ~= nil then
+		local packet = record.reviewPacket
+		if packet ~= nil then
 			for _, decision in appended do
-				if decision.packetId == (record.reviewPacket :: ReviewPacket).id then
+				if decision.packetId == packet.id then
 					table.insert(copy.decisions, decision)
 					attached += 1
 				end
@@ -979,7 +990,7 @@ local function continueReview(brief: Brief, plan: Plan, receipt: Receipt, drafts
 		mutationBudget = 0,
 		costBudgetMicros = source.costMicros,
 	}, checkpoint)
-	return Canonical.copy(integrated) :: Receipt
+	return Canonical.copy(integrated)
 end
 
 return {

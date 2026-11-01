@@ -63,7 +63,7 @@ local function create(receipt: Receipt, artifactIds: { string }): DeliveryManife
 				2
 			)
 		end
-		local review = bound :: Types.ResolvedReview
+		local review = bound
 		local faults = Provenance.requirementFaults(
 			derivationsById[artifact.id],
 			receipt.provenanceContract,
@@ -91,7 +91,7 @@ local function create(receipt: Receipt, artifactIds: { string }): DeliveryManife
 			metadata = table.clone(artifact.metadata),
 		})
 	end
-	table.sort(entries, function(a, b)
+	table.sort(entries, function(a: DeliveryEntry, b: DeliveryEntry)
 		return a.semanticId < b.semanticId
 	end)
 	local partial = {

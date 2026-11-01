@@ -25,7 +25,7 @@ local function nonempty(value: unknown): boolean
 end
 
 local function sha256(value: unknown): boolean
-	return type(value) == "string" and #value == 64 and string.match(value :: string, "^[0-9a-f]+$") ~= nil
+	return type(value) == "string" and #value == 64 and string.match(value, "^[0-9a-f]+$") ~= nil
 end
 
 local function destination(draft: unknown, hostVerification: unknown): (Destination?, boolean?)
@@ -38,27 +38,48 @@ local function destination(draft: unknown, hostVerification: unknown): (Destinat
 	if type(draft) ~= "table" then
 		error("Generate brief delivery.destination must be a table", 3)
 	end
-	local fields = draft :: { [unknown]: unknown }
-	for key in fields do
-		if key ~= "adapter" and key ~= "descriptor" then
+	local adapter: unknown = nil
+	local descriptor: unknown = nil
+	for key, value in draft do
+		if key == "adapter" then
+			adapter = value
+		elseif key == "descriptor" then
+			descriptor = value
+		else
 			error(("Generate brief delivery.destination carries unknown field %s"):format(tostring(key)), 3)
 		end
 	end
-	if not nonempty(fields.adapter) or string.match(fields.adapter :: string, "^[a-z][a-z0-9%-]*$") == nil then
+	if type(adapter) ~= "string" or adapter == "" or string.match(adapter, "^[a-z][a-z0-9%-]*$") == nil then
 		error("Generate brief delivery.destination.adapter must name one adapter in lowercase", 3)
 	end
-	if type(fields.descriptor) ~= "table" then
+	if type(descriptor) ~= "table" then
 		error("Generate brief delivery.destination.descriptor must be a data table", 3)
 	end
-	Secret.validate(fields.descriptor, "Generate brief delivery.destination.descriptor")
+	Secret.validate(descriptor, "Generate brief delivery.destination.descriptor")
+	local data: { [string]: unknown } = {}
+	for key, value in descriptor do
+		if type(key) ~= "string" then
+			error("Generate brief delivery.destination.descriptor requires string keys", 3)
+		end
+		data[key] = value
+	end
 	if hostVerification ~= nil and type(hostVerification) ~= "boolean" then
 		error("Generate brief delivery.hostVerification must be a boolean when declared", 3)
 	end
 	return {
-		adapter = fields.adapter :: string,
-		descriptor = Canonical.copy(fields.descriptor) :: { [string]: unknown },
-	},
-		hostVerification == true
+		adapter = adapter,
+		descriptor = Canonical.copy(data),
+	}, hostVerification == true
+end
+
+local function requestFingerprint(request: Types.HostVerificationRequest): string
+	local payload: { [unknown]: unknown } = {}
+	for key, value in request do
+		if key ~= "fingerprint" then
+			payload[key] = value
+		end
+	end
+	return Canonical.fingerprint(payload)
 end
 
 local function verificationFault(verification: HostVerification): string?
@@ -176,9 +197,7 @@ local function recordFault(record: PublicationRecord): string?
 		if type(request) ~= "table" or request.schemaVersion ~= 1 then
 			return "publication verificationRequest must name schemaVersion 1"
 		end
-		local payload: Types.HostVerificationRequestPayload & { fingerprint: string? } = table.clone(request)
-		payload.fingerprint = nil
-		if request.fingerprint ~= Canonical.fingerprint(payload) then
+		if request.fingerprint ~= requestFingerprint(request) then
 			return "publication verificationRequest fingerprint changed"
 		end
 		if
@@ -287,8 +306,8 @@ local function integrate(receipt: Receipt, record: PublicationRecord): Receipt
 			3
 		)
 	end
-	local integrated = Canonical.copy(receipt) :: Receipt
-	integrated.publication = Canonical.copy(record) :: PublicationRecord
+	local integrated = Canonical.copy(receipt)
+	integrated.publication = Canonical.copy(record)
 	integrated.fingerprint = ReceiptModel.fingerprint(integrated)
 	return integrated
 end
@@ -341,7 +360,7 @@ local function reconcile(receipt: Receipt, record: PublicationRecord): Receipt
 			2
 		)
 	end
-	local expected = Canonical.copy(prior) :: PublicationRecord
+	local expected = Canonical.copy(prior)
 	expected.disposition = record.disposition
 	expected.state = record.state
 	expected.detail = record.detail
@@ -391,12 +410,10 @@ local function confirm(receipt: Receipt, record: PublicationRecord): Receipt
 					2
 				)
 			end
-			local expected = Canonical.copy(pending) :: PublicationRecord
-			local rebound = Canonical.copy(pending.verificationRequest) :: Types.HostVerificationRequest
+			local expected = Canonical.copy(pending)
+			local rebound = Canonical.copy(pending.verificationRequest)
 			rebound.hostBuild = requested.hostBuild
-			local payload: Types.HostVerificationRequestPayload & { fingerprint: string? } = table.clone(rebound)
-			payload.fingerprint = nil
-			rebound.fingerprint = Canonical.fingerprint(payload)
+			rebound.fingerprint = requestFingerprint(rebound)
 			expected.verificationRequest = rebound
 			expected.verificationRebindings = expected.verificationRebindings or {}
 			table.insert(assert(expected.verificationRebindings), {
@@ -424,17 +441,18 @@ local function confirm(receipt: Receipt, record: PublicationRecord): Receipt
 				2
 			)
 		end
-		local expected = Canonical.copy(pending) :: PublicationRecord
+		local expected = Canonical.copy(pending)
 		expected.disposition = record.disposition
 		expected.state = "confirmed"
 		expected.detail = record.verification.detail
 		expected.verification = record.verification
 		expected.verificationCompletion = completion
-		table.insert(expected.stages, {
+		local completed: Types.PublicationStageReport = {
 			id = "complete-host-verification",
 			status = if record.verification.disposition == "verified" then "passed" else "refused",
 			detail = record.verification.detail,
-		})
+		}
+		table.insert(expected.stages, completed)
 		if Canonical.fingerprint(record) ~= Canonical.fingerprint(expected) then
 			error("Generate confirmPublication must preserve the deferred request and original publication history", 2)
 		end
