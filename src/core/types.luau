@@ -84,7 +84,7 @@ export type BriefDraft = {
 		requiredRightsFacts: { RightsFactName }?,
 	}?,
 	delivery: DeliveryContract,
-	metadata: StringMap?,
+	metadata: Metadata?,
 }
 
 export type Brief = {
@@ -96,7 +96,7 @@ export type Brief = {
 	review: ReviewContract,
 	provenance: ProvenanceContract,
 	delivery: DeliveryContract,
-	metadata: StringMap,
+	metadata: Metadata,
 }
 
 export type Operation = "generate" | "import" | "transform" | "verify" | "review" | "publish" | "custom"
