@@ -75,10 +75,9 @@ return Generate.brief {
 		expect(codes(source)):toEqual {}
 		expect(codes(source, ROBLOX)):toEqual { "RBX008", "RBX010", "RBX011", "RBX012", "RBX013" }
 		expect(Consumer.RULESETS):toEqual { "roblox" }
-		local unknown: unknown = "unknown"
-		expect(function()
-			codes(source, { unknown :: Consumer.Ruleset })
-		end):toThrow "does not know ruleset"
+		local accepted, problem = Test.protectedCall(codes, source, { "unknown" })
+		expect(accepted):toBe(false)
+		expect(tostring(problem)):toContain "does not know ruleset"
 	end)
 
 	it("accepts a metre bound with an explicit unit on a spatial brief", function()

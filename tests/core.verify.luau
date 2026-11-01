@@ -3,8 +3,7 @@
 local Test = require "./harness"
 
 local describe, it, expect = Test.describe, Test.it, Test.expect
-local sandbox: { pcall: (unknown, ...unknown) -> (boolean, unknown) } = _G
-local protected = sandbox.pcall
+local protected = Test.protectedCall
 
 local Canonical = require "../src/core/canonical"
 local Types = require "../src/core/types"

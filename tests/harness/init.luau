@@ -1,6 +1,7 @@
 --!strict
 
 local Bdd = require "../.lute/dependencies/verify/src/bdd"
+local intrinsics: { pcall: (unknown, ...unknown) -> (boolean, unknown) } = _G
 
 local surface = Bdd.surface {
 	executor = "lute",
@@ -10,6 +11,7 @@ local surface = Bdd.surface {
 }
 
 return {
+	protectedCall = intrinsics.pcall,
 	describe = surface.describe,
 	it = surface.it,
 	itSkip = surface.itSkip,

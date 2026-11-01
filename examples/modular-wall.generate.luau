@@ -25,7 +25,7 @@ local brief = Generate.brief {
 	},
 	provenance = {
 		requireParentLineage = true,
-		requiredRightsFacts = { "source", "owner" } :: { Generate.RightsFactName },
+		requiredRightsFacts = { "source", "owner" },
 	},
 	delivery = {
 		semanticId = "example.wall.straight",

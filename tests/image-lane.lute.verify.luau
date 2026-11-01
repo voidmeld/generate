@@ -479,8 +479,11 @@ describe("Image.request", function()
 		local complete = document().artifacts[1]
 		for _, field in { "id", "slug", "role", "tiles", "transparentBackground", "singleSubject" } do
 			local partial: { [string]: unknown } = {}
-			for key, value in complete do
-				partial[key :: string] = value
+			local original: unknown = complete
+			assert(type(original) == "table")
+			for key, value in original do
+				assert(type(key) == "string")
+				partial[key] = value
 			end
 			partial[field] = nil
 			expect(Request.artifactsRefusal({ partial }, "spec") ~= nil):toBe(true)
@@ -984,7 +987,7 @@ describe("Image.postprocess", function()
 
 	it("refuses malformed, unsupported, undeclared and mutating postprocess requests before execution", function()
 		for _, field in { "id", "kind", "scriptPath", "scriptDigest", "inputs", "outputPath", "parameters", "attempt" } do
-			local value = transform {}
+			local value = bindingFields(transform {})
 			value[field] = nil
 			expect(boundTransform({ kind = "postprocess", transform = value }).ok):toBe(false)
 		end
@@ -1093,14 +1096,15 @@ describe("Image.postprocess", function()
 					local lineage: { Generate.DerivationDraft } = {}
 					for _, artifact in imported do
 						artifact.digest = digest(deps.read(assert(artifact.locator)))
-						table.insert(lineage, {
+						local derivation: Generate.DerivationDraft = {
 							artifactId = artifact.id,
 							artifactDigest = artifact.digest,
 							origin = "imported",
 							parents = {},
 							inputDigests = { artifact.digest },
 							rights = { source = { state = "known", value = "fixture" } },
-						})
+						}
+						table.insert(lineage, derivation)
 					end
 					return { status = "returned", output = { artifacts = imported, derivations = lineage } }
 				end

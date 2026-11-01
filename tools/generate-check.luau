@@ -49,7 +49,7 @@ local function main(): number
 	local findings: { Consumer.Finding } = {}
 	local paths, problem = collect(root)
 	if paths == nil then
-		print("generate-check: " .. (problem :: string))
+		print("generate-check: " .. tostring(problem))
 		return 1
 	end
 	for _, path in paths do

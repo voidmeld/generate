@@ -189,7 +189,6 @@ Each module does one job.
 | Describe a Roblox destination | `Roblox.destination` and `Roblox.readDestination` |
 | Let a universe use assets that your creator owns | [`Roblox.permissionGrant`](#permission-grants) |
 | Read an asset, its owner and its moderation state | [`Roblox.assetReadback`](#asset-readback) |
-| Prove the provenance of a reference image and add its row to a manifest | [`Roblox.referenceProvenance`](#reference-provenance) |
 | Audit the reference rows of a manifest | [`Roblox.assetAudit`](#asset-audit) |
 | Read a binary instance file | [`Roblox.rbxm`](#binary-instance-files) |
 | Convert a size to studs | [`Roblox.units`](#destinations-and-units) |
@@ -306,24 +305,22 @@ It uses `AssetService:CreateAssetAsync` through `host.create`.
 
 ### Permission grants
 
-`Roblox.permissionGrant` lets a universe use assets that one creator owns. It checks authority, sorts the assets and records each request before and after it runs.
+`Roblox.permissionGrant` checks the credential subject, prepares ordered asset requests and sends one request per call. The consumer owns authorization, write-ahead records, recovery and destination proof.
 
 | Task | Call |
 | --- | --- |
 | Read the group membership and roles of the credential owner and record them as facts | `Roblox.permissionGrant.subjectAuthority(options, credential, universeId, groupId)` |
-| Split read-back assets into those that the owner can grant and external assets | `Roblox.permissionGrant.census(records, owner)` |
 | Split asset IDs into groups of one request | `Roblox.permissionGrant.chunks(assetIds, size)` |
 | Build the request for one group | `Roblox.permissionGrant.prepare(encode, universeId, assetIds)` |
 | Send one request and check that the response confirms exactly the requested assets | `Roblox.permissionGrant.attempt(send, decode, prepared)` |
-| Run all chunks of one transaction | `Roblox.permissionGrant.grant(transaction)` |
 | Compare a prepared request with a stored one | `Roblox.permissionGrant.ENDPOINT` and `Roblox.permissionGrant.MAX_ASSETS_PER_REQUEST` |
 | Set the decision of a credential record | `Roblox.permissionGrant.CREDENTIAL_DECISION` |
 | Match an authority decision | `Roblox.permissionGrant.DECISIONS` has `bound` and `refused`. |
 | Match an authority reason | `Roblox.permissionGrant.REASONS` has `membershipAbsent` and `scopesUncovered`. |
 
-- `chunks` orders the IDs, refuses duplicates and non-numeric IDs, and allows at most `MAX_ASSETS_PER_REQUEST` IDs in a group.
+- `chunks` orders the IDs, refuses duplicates and IDs that cannot be represented exactly as positive integers below 2^53, and allows at most `MAX_ASSETS_PER_REQUEST` IDs in a group.
 - `prepare` builds one `PATCH` request with the action `Use`. It carries the header names and the sorted asset IDs.
-- `grant(transaction)` records each chunk before and after its attempt. It refuses to repeat a settled attempt. A terminal receipt that cannot be written refuses a retry.
+- `attempt` never retries. Malformed JSON, response errors and mismatched confirmations refuse the result while retaining the HTTP status and bounded response body. An unconfirmed result does not authorize another attempt.
 - `subjectAuthority` needs a credential record with `decision = Roblox.permissionGrant.CREDENTIAL_DECISION`, an `authorizedUserId` and permission operations that include `write`.
 
 ### Asset readback
@@ -340,60 +337,9 @@ Every request is a `GET`. A readback proves ownership and state. It authorizes n
 
 A `Record` has the creator, type, moderation state, privacy, revision, `source` and a `diagnostic`. A field that the reply does not carry is `unknown` and never a passing value.
 A `Census` reports foreign owners, unapproved moderation, unresolved IDs and whether the census is closed. It reads exactly the IDs that you name.
+
+Readback retries only HTTP 429 and 503, within `maxRetries`. A rate-limit reset is capped at 60 seconds. HTTP 401 stops immediately. The optional public-details read after HTTP 403 remains an observation; missing moderation stays unknown.
 `options` has `send`, `decode` and `owner`. Optional fields are `sendPublic`, `sleep`, `clock`, `paced`, `baseUrl`, `detailsBaseUrl`, `maxRetries` (default `5`) and `minIntervalSeconds` (default `0.55`).
-The adapter retries only a throttled read. It falls back to the public details only when the record refuses the read and `sendPublic` exists.
-
-### Reference provenance
-
-`Roblox.referenceProvenance.record` proves the provenance of one reference image and adds its row to a manifest text.
-A reference image is an image that guides generation. The row binds these facts:
-
-- the committed source file of the image, its tool, model, prompt, date and SHA-256, as read from a lineage file
-- the uploaded asset, as proved by a recorded readback
-- exactly one independent reviewer verdict, with its receipt and anchor
-- a disposition that the consumer names
-
-`record(config, codecs, files, draft)` runs the checks and returns an `Outcome`. It writes only when all checks pass:
-
-1. The readback names the declared creator, an approved moderation state, a closed dependency census and the same asset ID.
-2. The image is a committed PNG under `config.referenceRoot`. Its bytes match the SHA-256 of its lineage row. Exactly one lineage file names it.
-3. The receipt paths are committed paths. A path that starts with `.` or has a hidden segment is refused, because a fresh checkout does not carry it.
-4. The disposition is not the terminal disposition. The consumer sets that one after the dependent content is published and linked back.
-5. The renderer reproduces the rendered table from the current manifest. Then the row is spliced into the manifest text. An existing key is never overwritten.
-
-The `config` names these inputs:
-
-- creator `owner`
-- manifest `sections` and the destination `referenceSection`
-- `manifestPath`, `renderedPath` and `referenceRoot`
-- `lineagePath`: a file, directory or list of files
-- consumer `render` function
-
-No section name has a default.
-Optional fields are `terminalDisposition` (default `accepted`) and `activeState` (default `Active`).
-The row has these keys. The audit reads the same keys.
-
-| Key | Value |
-| --- | --- |
-| `id` | The key of the row. |
-| `committed_source_path` | The committed path of the reference image. |
-| `source_sha256` | The SHA-256 of the image bytes. |
-| `generation_tool`, `generation_model`, `generation_date` | From the lineage row. |
-| `lineage_path` | The lineage file that names the image. |
-| `prompt` or `prompt_path`, and `prompt_sha256` | The inline prompt or the committed prompt file, and its SHA-256. |
-| `image_asset_id`, `source_asset_id` | The uploaded asset and the asset that the image came from. |
-| `owner`, `owner_id`, `state` | The declared creator and the active state. |
-| `creator_transfer_pending` | Always `false`. |
-| `moderation_state` | From the readback. |
-| `image_readback_receipt` | The committed path of the readback receipt. |
-| `reviewer_verdict_ids`, `reviewer_verdict_receipt`, `reviewer_verdict_anchor` | The one reviewer verdict. |
-| `rights_basis` | Always `generated_by_owner`. |
-| `disposition` | The disposition that the consumer names. |
-
-A lineage file holds text rows. Each row is `source_path = "...", tool = "...", model = "...", prompt = "..."?, date = "...", sha256 = "..."`.
-A model row names its reference with `reference_sha256` and `reference_image_asset_id`, its prompt with `model_prompt_sha256` and its verdict with `comparison_verdict_receipt`.
-
-The module reads no credential and makes no request.
 
 ### Asset audit
 

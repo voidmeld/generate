@@ -4,6 +4,15 @@ local Image = require "../../src/image"
 
 local SIGNATURE = "\137PNG\r\n\26\n"
 
+local function readBigU32(data: buffer, at: number): number
+	return bit32.bor(
+		bit32.lshift(buffer.readu8(data, at), 24),
+		bit32.lshift(buffer.readu8(data, at + 1), 16),
+		bit32.lshift(buffer.readu8(data, at + 2), 8),
+		buffer.readu8(data, at + 3)
+	)
+end
+
 local CRC_TABLE: { number } = {}
 do
 	for n = 0, 255 do
@@ -76,21 +85,22 @@ local function encodeRgba(width: number, height: number, sample: (x: number, y: 
 end
 
 local function inflateStored(bytes: string, expected: number): (buffer?, string?)
+	local source = buffer.fromstring(bytes)
 	local out = buffer.create(expected)
 	local written = 0
 	local position = 3
 	while position <= #bytes do
-		local flags = string.byte(bytes, position)
+		local flags = buffer.readu8(source, position - 1)
 		if flags > 1 then
 			return nil, "this fixture codec reads stored deflate blocks only"
 		end
-		local length = string.unpack("<I2", bytes, position + 1)
+		local length = buffer.readu16(source, position)
 		position += 5
 		for offset = 0, length - 1 do
 			if written >= expected then
 				return nil, "the stream carries more bytes than the header declares"
 			end
-			buffer.writeu8(out, written, string.byte(bytes, position + offset))
+			buffer.writeu8(out, written, buffer.readu8(source, position + offset - 1))
 			written += 1
 		end
 		position += length
@@ -128,19 +138,20 @@ local function decode(bytes: string): Image.Decoded
 		return { ok = false, reason = "the file does not carry a PNG signature" }
 	end
 	local position = 9
+	local source = buffer.fromstring(bytes)
 	local width, height, channels = 0, 0, 0
 	local compressed: { string } = {}
 	local sawHeader = false
 	while position + 7 <= #bytes do
-		local length = string.unpack(">I4", bytes, position)
+		local length = readBigU32(source, position - 1)
 		local kind = string.sub(bytes, position + 4, position + 7)
 		local payloadStart = position + 8
 		if payloadStart + length - 1 > #bytes then
 			return { ok = false, reason = ("chunk %s declares bytes the file does not carry"):format(kind) }
 		end
 		if kind == "IHDR" then
-			local depth, colorType
-			width, height, depth, colorType = string.unpack(">I4I4BB", bytes, payloadStart)
+			width, height = readBigU32(source, payloadStart - 1), readBigU32(source, payloadStart + 3)
+			local depth, colorType = buffer.readu8(source, payloadStart + 7), buffer.readu8(source, payloadStart + 8)
 			if depth ~= 8 or (colorType ~= 2 and colorType ~= 6) then
 				return { ok = false, reason = "this fixture codec reads 8-bit RGB and RGBA only" }
 			end
@@ -159,11 +170,12 @@ local function decode(bytes: string): Image.Decoded
 	if #compressed == 0 then
 		return { ok = false, reason = "the PNG carries no IDAT chunk" }
 	end
+	assert(type(width) == "number" and type(height) == "number")
 	local raw, diagnostic = inflateStored(table.concat(compressed), height * (1 + width * channels))
 	if raw == nil then
-		return { ok = false, reason = diagnostic :: string }
+		return { ok = false, reason = assert(diagnostic) }
 	end
-	return unfilter(raw :: buffer, width, height, channels)
+	return unfilter(raw, width, height, channels)
 end
 
 local function digest(bytes: string): string

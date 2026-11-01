@@ -1,5 +1,7 @@
 --!strict
 
+local Wire = require "./wire"
+
 export type Creator = { kind: "group" | "user", id: string }
 
 export type Review = { by: string, verdict: string, shows: string, sha256: string? }
@@ -194,22 +196,33 @@ local function copy(value: unknown): unknown
 		return value
 	end
 	local clone: { [unknown]: unknown } = {}
-	for key, item in value :: { [unknown]: unknown } do
+	for key, item in value do
 		clone[key] = copy(item)
 	end
 	return clone
 end
 
 local function copyRecord(value: Record): Record
-	return copy(value) :: Record
+	local result = table.clone(value)
+	result.creator = if value.creator then table.clone(value.creator) else nil
+	result.review = if value.review then table.clone(value.review) else nil
+	result.identity = if value.identity then table.clone(value.identity) else nil
+	if value.authority then
+		local authority: Authority = {}
+		for key, item in value.authority do
+			authority[key] = copy(item)
+		end
+		result.authority = authority
+	end
+	return result
 end
 
 local function copyCreator(value: Creator): Creator
-	return copy(value) :: Creator
+	return table.clone(value)
 end
 
 local function copyIdentity(value: { [string]: string }?): { [string]: string }?
-	return copy(value) :: { [string]: string }?
+	return if value then table.clone(value) else nil
 end
 
 local function redact(text: string, secrets: { [string]: string }?): string
@@ -219,10 +232,10 @@ local function redact(text: string, secrets: { [string]: string }?): string
 				local from = 1
 				while true do
 					local first, last = string.find(text, secret, from, true)
-					if first == nil then
+					if first == nil or last == nil then
 						break
 					end
-					text = string.sub(text, 1, first - 1) .. "[redacted]" .. string.sub(text, (last :: number) + 1)
+					text = string.sub(text, 1, first - 1) .. "[redacted]" .. string.sub(text, last + 1)
 					from = first + #"[redacted]"
 				end
 			end
@@ -286,12 +299,13 @@ local function exchange(
 	end
 	local headers = table.clone(config.headers(purpose))
 	headers["Content-Type"] = contentType or "application/json"
-	local ok, reply = pcall(send, {
+	local request: Request = {
 		method = method,
 		url = (config.baseUrl or DEFAULT_BASE_URL) .. path,
 		headers = headers,
 		body = body,
-	})
+	}
+	local ok, reply = pcall(send, request)
 	if not ok then
 		return { failure = "unknown", detail = redact(tostring(reply), headers) }, headers
 	end
@@ -308,14 +322,23 @@ local function decodeBody(config: Config, body: string): { [string]: unknown }?
 	end
 	local ok, value = pcall(json.decode, body)
 	if ok and type(value) == "table" then
-		return value :: { [string]: unknown }
+		local fields: { [string]: unknown } = {}
+		for key, item in value do
+			if type(key) == "string" then
+				fields[key] = item
+			end
+		end
+		return fields
 	end
 	return nil
 end
 
 local function statusFailure(reply: Reply): Result?
-	local status = reply.status :: number
-	local body = reply.body :: string
+	if reply.failure then
+		return hold("remote_unreachable", "poll", reply.detail)
+	end
+	local status = reply.status
+	local body = reply.body
 	if status >= 200 and status < 300 then
 		return nil
 	end
@@ -367,7 +390,7 @@ local function readAsset(config: Config, assetId: string, expectedType: string?,
 		applyExtra(failed, extra)
 		return failed
 	end
-	local body = decodeBody(config, reply.body :: string)
+	local body = decodeBody(config, reply.body)
 	if body == nil or tostring(body.assetId) ~= assetId then
 		return hold("malformed", "poll", "the asset readback is not a matching document", extra)
 	end
@@ -375,23 +398,23 @@ local function readAsset(config: Config, assetId: string, expectedType: string?,
 	if context ~= nil and type(context) ~= "table" then
 		return hold("malformed", "poll", "the asset readback carries an invalid creation context", extra)
 	end
-	local creator = if type(context) == "table" then (context :: { [string]: unknown }).creator else nil
+	local creator = Wire.field(context, "creator")
 	local actual: Creator? = nil
 	if creator ~= nil then
 		if type(creator) ~= "table" then
 			return hold("malformed", "poll", "the asset readback carries an invalid creator", extra)
 		end
-		local fields = creator :: { [string]: unknown }
+		local groupId, userId = Wire.field(creator, "groupId"), Wire.field(creator, "userId")
 		for _, name in { "groupId", "userId" } do
-			local id = fields[name]
+			local id = Wire.field(creator, name)
 			if id ~= nil and type(id) ~= "string" and type(id) ~= "number" then
 				return hold("malformed", "poll", "the asset readback carries an invalid creator id", extra)
 			end
 		end
-		if fields.groupId ~= nil and fields.userId == nil then
-			actual = { kind = "group", id = tostring(fields.groupId) }
-		elseif fields.userId ~= nil and fields.groupId == nil then
-			actual = { kind = "user", id = tostring(fields.userId) }
+		if groupId ~= nil and userId == nil then
+			actual = { kind = "group", id = tostring(groupId) }
+		elseif userId ~= nil and groupId == nil then
+			actual = { kind = "user", id = tostring(userId) }
 		end
 	end
 	local assetType = body.assetType
@@ -403,7 +426,7 @@ local function readAsset(config: Config, assetId: string, expectedType: string?,
 		if type(body.moderationResult) ~= "table" then
 			return hold("malformed", "poll", "the asset readback carries an invalid moderation result", extra)
 		end
-		local state = (body.moderationResult :: { [string]: unknown }).moderationState
+		local state = Wire.field(body.moderationResult, "moderationState")
 		if state ~= nil and type(state) ~= "string" then
 			return hold("malformed", "poll", "the asset readback carries an invalid moderation state", extra)
 		end
@@ -429,7 +452,7 @@ local function readOperation(config: Config, operation: string, extra: Extra): (
 		applyExtra(failed, extra)
 		return nil, failed
 	end
-	local body = decodeBody(config, reply.body :: string)
+	local body = decodeBody(config, reply.body)
 	if body == nil then
 		return nil, hold("malformed", "poll", "the operation readback is not a document", extra)
 	end
@@ -444,10 +467,11 @@ local function readOperation(config: Config, operation: string, extra: Extra): (
 		return nil, hold("pending", "poll", "operation is not done", extra)
 	end
 	local response = body.response
-	if type(response) ~= "table" or (response :: { assetId: unknown }).assetId == nil then
+	local assetId = Wire.field(response, "assetId")
+	if type(response) ~= "table" or assetId == nil then
 		return nil, stop("failed", "the finished operation returned no asset", extra)
 	end
-	return tostring((response :: { assetId: unknown }).assetId), nil
+	return tostring(assetId), nil
 end
 
 local function readState(config: Config, record: Record): Result
@@ -464,7 +488,10 @@ local function readState(config: Config, record: Record): Result
 		assetId = found
 		record.assetId = found
 	end
-	local state = readAsset(config, assetId :: string, record.assetType, extra)
+	if type(assetId) ~= "string" then
+		return stop("ambiguous", "the operation returned no asset id", extra)
+	end
+	local state = readAsset(config, assetId, record.assetType, extra)
 	if state.version ~= nil then
 		record.version = state.version
 	end
@@ -500,7 +527,7 @@ local function multipart(
 	digest: string,
 	format: { contentType: string }
 ): (string, string)
-	local json = config.json :: Json
+	local json = assert(config.json)
 	local boundary = "generate" .. digest
 	local creator = if config.creator.kind == "group"
 		then { groupId = config.creator.id }
@@ -631,9 +658,12 @@ local function upload(config: Config, request: UploadRequest): Result
 	if failure == "unknown" then
 		return stop("ambiguous", reply.detail, { record = copyRecord(record) })
 	end
-	local status = reply.status :: number
+	local status = reply.status
+	if type(status) ~= "number" or type(reply.body) ~= "string" then
+		return stop("ambiguous", "the create call returned no readable response", { record = copyRecord(record) })
+	end
 	if status >= 200 and status < 300 then
-		local decoded = decodeBody(config, reply.body :: string)
+		local decoded = decodeBody(config, reply.body)
 		local operation = decoded and decoded.path
 		if type(operation) ~= "string" or string.match(operation, "^operations/[%x%-]+$") == nil then
 			return stop("ambiguous", "the create call returned no operation", { record = copyRecord(record) })
@@ -655,7 +685,7 @@ local function upload(config: Config, request: UploadRequest): Result
 			{ record = copyRecord(record) }
 		)
 	end
-	local refused = statusFailure(reply) :: Result
+	local refused = assert(statusFailure(reply))
 	record.attempt = if refused.reason == "refused" then "refused" else "failed"
 	config.store.write(digest, copyRecord(record))
 	refused.record = copyRecord(record)
@@ -718,7 +748,10 @@ local function status(config: Config, reference: string, expectedType: string?):
 		if pending then
 			return pending
 		end
-		assetId = found :: string
+		if found == nil then
+			return stop("ambiguous", "the operation returned no asset id", extra)
+		end
+		assetId = found
 	end
 	if string.match(assetId, "^[1-9]%d*$") == nil then
 		return stop("invalid", "expected an asset id or operations/<id>")
@@ -829,7 +862,7 @@ local function nativeSave(config: Config, host: NativeHost, request: NativeReque
 		end
 		if existing.assetId ~= nil then
 			local record = copyRecord(existing)
-			local state = nativeReadback(host, record.assetId :: string, request.kind, config.creator)
+			local state = nativeReadback(host, existing.assetId, request.kind, config.creator)
 			record.moderation = state.moderation or record.moderation
 			record.version = state.version or record.version
 			config.store.write(key, copyRecord(record))

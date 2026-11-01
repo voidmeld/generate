@@ -82,6 +82,12 @@ local function facts(bytes: string, overrides: DeclarationOverrides): Image.QaAs
 	return Qa.assess(QA, bytes, declaration(overrides), "spec://candidate.png")
 end
 
+local function numberFact(assessment: Image.QaAssessment, name: string): number
+	local value = assessment.facts[name]
+	assert(type(value) == "number", "the measurement is not numeric: " .. name)
+	return value
+end
+
 local function refusedOn(assessment: Image.QaAssessment, fact: string): boolean
 	for _, entry in assessment.refusals do
 		if entry.fact == fact then
@@ -212,11 +218,11 @@ describe("Image.qa produced-byte facts", function()
 	it("measures the wrap join against the surface's own interior gradient", function()
 		local seam = facts(seamed(), { tiles = true })
 		expect(seam.facts.decoded):toBe(true)
-		expect(seam.facts.wrapSeamRatioX > LIMITS.maxWrapSeamRatio):toBe(true)
+		expect(numberFact(seam, "wrapSeamRatioX") > LIMITS.maxWrapSeamRatio):toBe(true)
 		expect(refusedOn(seam, "tileability")):toBe(true)
 
 		local tiles = facts(wrapping(), { tiles = true })
-		expect(tiles.facts.wrapSeamRatio <= LIMITS.maxWrapSeamRatio):toBe(true)
+		expect(numberFact(tiles, "wrapSeamRatio") <= LIMITS.maxWrapSeamRatio):toBe(true)
 		expect(refusedOn(tiles, "tileability")):toBe(false)
 	end)
 
@@ -227,8 +233,8 @@ describe("Image.qa produced-byte facts", function()
 	it("refuses a discontinuity exposed inside a half-offset composite", function()
 		local assessment = facts(interiorSeamed(), { tiles = true })
 		expect(assessment.facts.maxInteriorColumnX):toBe(SIZE // 2)
-		expect(assessment.facts.maxInteriorColumnRatio > LIMITS.maxInteriorSeamRatio):toBe(true)
-		expect(assessment.facts.fractionalColumnRatio > LIMITS.maxFractionalSeamRatio):toBe(true)
+		expect(numberFact(assessment, "maxInteriorColumnRatio") > LIMITS.maxInteriorSeamRatio):toBe(true)
+		expect(numberFact(assessment, "fractionalColumnRatio") > LIMITS.maxFractionalSeamRatio):toBe(true)
 		expect(refusedOn(assessment, "interior-seam")):toBe(true)
 		expect(refusedOn(assessment, "fractional-interior-seam")):toBe(true)
 	end)
@@ -239,15 +245,15 @@ describe("Image.qa produced-byte facts", function()
 		expect(refusedOn(hard, "opacity-census")):toBe(true)
 
 		local authored = facts(authoredOpacity(), { transparentBackground = true })
-		expect(authored.facts.semiTransparentFraction > 0):toBe(true)
+		expect(numberFact(authored, "semiTransparentFraction") > 0):toBe(true)
 		expect(refusedOn(authored, "opacity-census")):toBe(false)
 		expect(#authored.refusals):toBe(0)
 	end)
 
 	it("refuses saturated colour-key residue stored under the transparent texels", function()
 		local residue = facts(keyResidue(), { transparentBackground = true })
-		expect(residue.facts.keyResidueTexels > 0):toBe(true)
-		expect(residue.facts.keyResidueFraction > LIMITS.maxKeyResidueFraction):toBe(true)
+		expect(numberFact(residue, "keyResidueTexels") > 0):toBe(true)
+		expect(numberFact(residue, "keyResidueFraction") > LIMITS.maxKeyResidueFraction):toBe(true)
 		expect(refusedOn(residue, "key-residue")):toBe(true)
 	end)
 
@@ -268,7 +274,7 @@ describe("Image.qa produced-byte facts", function()
 			return { r = value, g = value, b = value, a = if distance > 4.8 then 180 else 255 }
 		end)
 		local assessment = facts(haloed, { transparentBackground = true })
-		expect(assessment.facts.haloRatio > LIMITS.maxHaloRatio):toBe(true)
+		expect(numberFact(assessment, "haloRatio") > LIMITS.maxHaloRatio):toBe(true)
 		expect(refusedOn(assessment, "halo")):toBe(true)
 	end)
 
@@ -288,7 +294,7 @@ describe("Image.qa produced-byte facts", function()
 			return { r = value, g = value, b = value, a = 255 }
 		end)
 		local assessment = facts(vignetted, {})
-		expect(assessment.facts.vignetteRatio > LIMITS.warnVignetteRatio):toBe(true)
+		expect(numberFact(assessment, "vignetteRatio") > LIMITS.warnVignetteRatio):toBe(true)
 		expect(#assessment.warnings > 0):toBe(true)
 		expect(#assessment.refusals):toBe(0)
 	end)
@@ -296,8 +302,8 @@ describe("Image.qa produced-byte facts", function()
 	it("refuses pixels inside a declared hue band and bright local maxima", function()
 		local band: Image.QaHueBand = { fromDegrees = 20, toDegrees = 60, maxFraction = 0.5 }
 		local inside = facts(warm(), { hueBand = band })
-		expect((inside.facts.hueBandFraction :: number) > 0.99):toBe(true)
-		expect(inside.facts.meanHue >= 20):toBe(true)
+		expect(numberFact(inside, "hueBandFraction") > 0.99):toBe(true)
+		expect(numberFact(inside, "meanHue") >= 20):toBe(true)
 		expect(refusedOn(inside, "hue-band")):toBe(true)
 
 		local outside = facts(warm(), { hueBand = { fromDegrees = 200, toDegrees = 260, maxFraction = 0.5 } })
@@ -312,32 +318,40 @@ describe("Image.qa produced-byte facts", function()
 		expect(refusedOn(undeclared, "hue-band")):toBe(false)
 
 		local pips = facts(specularPips(), { limitBrightMaxima = true })
-		expect(pips.facts.brightMaximaFraction > LIMITS.maxBrightMaximaFraction):toBe(true)
+		expect(numberFact(pips, "brightMaximaFraction") > LIMITS.maxBrightMaximaFraction):toBe(true)
 		expect(refusedOn(pips, "bright-maxima")):toBe(true)
 		expect(refusedOn(facts(specularPips(), {}), "bright-maxima")):toBe(false)
 	end)
 
 	it("names a threshold the consumer did not declare", function()
-		local incomplete = table.clone((LIMITS :: unknown) :: { [string]: unknown })
+		local incomplete: { [string]: unknown } = {}
+		local original: unknown = LIMITS
+		assert(type(original) == "table")
+		for key, value in original do
+			assert(type(key) == "string")
+			incomplete[key] = value
+		end
 		incomplete.maxHaloRatio = nil
-		local config = { schema = QA.schema, codec = Codec, thresholds = incomplete } :: unknown
-		expect(function()
-			Qa.assess(config :: Image.QaConfig, wrapping(), declaration {}, "spec://candidate.png")
-		end):toThrow "threshold maxHaloRatio"
-		expect(function()
-			Qa.gate(config :: Image.QaConfig, {
-				exists = function(): boolean
-					return true
-				end,
-				read = function(): string
-					return ""
-				end,
-			}, {}, {})
-		end):toThrow "threshold maxHaloRatio"
-		local bare = { schema = QA.schema, codec = Codec } :: unknown
-		expect(function()
-			Qa.assess(bare :: Image.QaConfig, wrapping(), declaration {}, "spec://candidate.png")
-		end):toThrow "thresholds table"
+		local config = { schema = QA.schema, codec = Codec, thresholds = incomplete }
+		local assessed, assessmentError =
+			Test.protectedCall(Qa.assess, config, wrapping(), declaration {}, "spec://candidate.png")
+		expect(assessed):toBe(false)
+		expect(tostring(assessmentError)):toContain "threshold maxHaloRatio"
+		local gated, gateError = Test.protectedCall(Qa.gate, config, {
+			exists = function(): boolean
+				return true
+			end,
+			read = function(): string
+				return ""
+			end,
+		}, {}, {})
+		expect(gated):toBe(false)
+		expect(tostring(gateError)):toContain "threshold maxHaloRatio"
+		local bare = { schema = QA.schema, codec = Codec }
+		local accepted, missingError =
+			Test.protectedCall(Qa.assess, bare, wrapping(), declaration {}, "spec://candidate.png")
+		expect(accepted):toBe(false)
+		expect(tostring(missingError)):toContain "thresholds table"
 	end)
 
 	it("refuses declared dimensions that do not match the delivered PNG", function()
@@ -348,7 +362,7 @@ describe("Image.qa produced-byte facts", function()
 
 	it("refuses a blurred, duplicated, mirrored, or screened tile edge", function()
 		local blurred = facts(blurredEdges(), { tiles = true })
-		expect(blurred.facts.edgeBlurRatio < LIMITS.minEdgeBlurRatio):toBe(true)
+		expect(numberFact(blurred, "edgeBlurRatio") < LIMITS.minEdgeBlurRatio):toBe(true)
 		expect(refusedOn(blurred, "edge-blur-band")):toBe(true)
 
 		local duplicate = facts(duplicateEdges(), { tiles = true })
@@ -356,11 +370,11 @@ describe("Image.qa produced-byte facts", function()
 		expect(refusedOn(duplicate, "duplicate-edge")):toBe(true)
 
 		local mirror = facts(mirroredEdges(), { tiles = true })
-		expect(mirror.facts.edgeMirrorCorrelation > LIMITS.maxEdgeMirrorCorrelation):toBe(true)
+		expect(numberFact(mirror, "edgeMirrorCorrelation") > LIMITS.maxEdgeMirrorCorrelation):toBe(true)
 		expect(refusedOn(mirror, "edge-mirror-symmetry")):toBe(true)
 
 		local screen = facts(screenPattern(), { tiles = true })
-		expect(screen.facts.hfScreenPatternPeakRatio > LIMITS.maxHfScreenPatternPeakRatio):toBe(true)
+		expect(numberFact(screen, "hfScreenPatternPeakRatio") > LIMITS.maxHfScreenPatternPeakRatio):toBe(true)
 		expect(refusedOn(screen, "hf-screen-pattern")):toBe(true)
 	end)
 
@@ -376,7 +390,7 @@ describe("Image.qa produced-byte facts", function()
 				},
 			},
 		})
-		expect(assessment.facts.luma50 > 20):toBe(true)
+		expect(numberFact(assessment, "luma50") > 20):toBe(true)
 		expect(refusedOn(assessment, "register-value-p5")):toBe(true)
 		expect(refusedOn(assessment, "register-value-p50")):toBe(true)
 		expect(refusedOn(assessment, "register-value-p95")):toBe(true)
@@ -477,14 +491,14 @@ describe("Image.matte", function()
 			return { r = value, g = value, b = value, a = 255 }
 		end)
 		local before = assessed(bytes)
-		expect(before.facts.keyResidueFraction > LIMITS.maxKeyResidueFraction):toBe(true)
-		expect(before.facts.haloRatio > LIMITS.maxHaloRatio):toBe(true)
+		expect(numberFact(before, "keyResidueFraction") > LIMITS.maxKeyResidueFraction):toBe(true)
+		expect(numberFact(before, "haloRatio") > LIMITS.maxHaloRatio):toBe(true)
 		local result = Matte.run(Codec, bytes, MATTE_PARAMETERS)
 		expect(result.ok):toBe(true)
 		assert(result.ok == true)
 		local after = assessed(result.bytes)
 		expect(after.facts.keyResidueFraction):toBe(0)
-		expect(after.facts.haloRatio < LIMITS.maxHaloRatio):toBe(true)
+		expect(numberFact(after, "haloRatio") < LIMITS.maxHaloRatio):toBe(true)
 		local output = decoded(result.bytes)
 		expect(sample(output, 15, 15, 0)):toBe(60)
 		expect(sample(output, 0, 0, 0)):toBe(230)
@@ -500,7 +514,9 @@ describe("Image.matte", function()
 		)
 		expect(result.ok):toBe(true)
 		assert(result.ok == true)
-		expect(assessed(result.bytes).facts.semiTransparentFraction >= LIMITS.minSemiTransparentFraction):toBe(true)
+		expect(numberFact(assessed(result.bytes), "semiTransparentFraction") >= LIMITS.minSemiTransparentFraction):toBe(
+			true
+		)
 	end)
 
 	it("is byte-idempotent on a clean card and reports the parameters it applied", function()

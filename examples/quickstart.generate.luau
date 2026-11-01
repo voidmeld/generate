@@ -15,7 +15,7 @@ local brief = Generate.brief {
 		blindness = "required",
 		independence = "required",
 	},
-	provenance = { requireParentLineage = true, requiredRightsFacts = { "source" } :: { Generate.RightsFactName } },
+	provenance = { requireParentLineage = true, requiredRightsFacts = { "source" } },
 	delivery = { semanticId = "example.crate", target = "example-host" },
 }
 

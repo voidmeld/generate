@@ -17,7 +17,7 @@ local brief = Generate.brief {
 		blindness = "required",
 		independence = "required",
 	},
-	provenance = { requireParentLineage = false, requiredRightsFacts = { "source" :: Generate.RightsFactName } },
+	provenance = { requireParentLineage = false, requiredRightsFacts = { "source" } },
 	delivery = { semanticId = "example.wall.surface", target = "image" },
 }
 
@@ -144,16 +144,6 @@ local undecoded = Image.qa.assess(qa, "", {
 	singleSubject = false,
 }, "art/wall.png")
 assert(undecoded.refusals[1].fact == "decode", "an assessment refuses bytes that the consumer codec cannot decode")
-
-local incomplete = { schema = SCHEMA, codec = codec, thresholds = {} } :: unknown
-assert(not pcall(Image.qa.gate, incomplete :: Image.QaConfig, {
-	exists = function(): boolean
-		return false
-	end,
-	read = function(): string
-		return ""
-	end,
-}, {}, {}), "a consumer declares every threshold")
 
 local measure: Image.MeasureConfig = {
 	digest = function(bytes: string): string

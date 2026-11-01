@@ -10,7 +10,7 @@ local Verify = require "../.lute/dependencies/verify/src/core"
 local spec = require "../bench/simple-path"
 
 local USAGE = "usage: lute run tools/benchmark.luau [--out file] | --compare baseline.json candidate.json"
-local RULE = { ratio = 1.25, floor = 20 }
+local RULE: Benchmark.CompareRule = { ratio = 1.25, floor = 20 }
 
 local function load(path: string): Benchmark.Stored
 	return Benchmark.decode(Lute.parse(fs.readFileToString(path)))

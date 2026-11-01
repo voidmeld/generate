@@ -2,7 +2,6 @@
 
 local AssetAudit = require "./roblox/asset-audit"
 local AssetReadback = require "./roblox/asset-readback"
-local ReferenceProvenance = require "./roblox/reference-provenance"
 local Delivery = require "./roblox/delivery"
 local PermissionGrant = require "./roblox/permission-grant"
 local Destination = require "./roblox/destination"
@@ -11,6 +10,7 @@ local Units = require "./roblox/units"
 local PermissionRequestModule = require "./roblox/permission-request"
 local Wire = require "./roblox/wire"
 
+export type AssetAuditFiles = AssetAudit.Files
 export type AssetAuditConfig = AssetAudit.Config
 export type AssetAuditInput = AssetAudit.Input
 export type AssetAuditReference = AssetAudit.Reference
@@ -19,13 +19,6 @@ export type AssetReadbackOptions = AssetReadback.Options
 export type AssetReadbackOwner = AssetReadback.Owner
 export type AssetRecord = AssetReadback.Record
 export type AssetCensus = AssetReadback.Census
-export type ReferenceCodecs = ReferenceProvenance.Codecs
-export type ReferenceRowValue = ReferenceProvenance.RowValue
-export type ReferenceConfig = ReferenceProvenance.Config
-export type ReferenceFiles = ReferenceProvenance.Files
-export type ReferenceDraft = ReferenceProvenance.ReferenceDraft
-export type ReferenceOutcome = ReferenceProvenance.Outcome
-export type ReferenceSource = ReferenceProvenance.Source
 export type DeliveryAuthority = Delivery.Authority
 export type DeliveryAttributeInstance = Delivery.AttributeInstance
 export type DeliveryAttributeJson = Delivery.AttributeJson
@@ -46,18 +39,9 @@ export type DeliveryNativeRequest = Delivery.NativeRequest
 export type PermissionAuthorityOptions = PermissionGrant.AuthorityOptions
 export type PermissionCredential = PermissionGrant.Credential
 export type PermissionAssignedRole = PermissionGrant.AssignedRole
-export type PermissionAttemptResult = PermissionGrant.AttemptResult
-export type PermissionReceipt = PermissionGrant.Receipt
-export type PermissionChunk = PermissionGrant.Chunk
 export type PermissionChunkOutcome = PermissionGrant.ChunkOutcome
 export type PermissionAuthorityReceipt = PermissionGrant.AuthorityReceipt
-export type PermissionDestination = PermissionGrant.Destination
-export type PermissionPartition = PermissionGrant.Partition
 export type PermissionPatch = PermissionGrant.Patch
-export type PermissionPrepared = PermissionGrant.Prepared
-export type PermissionReceiptStore = PermissionGrant.ReceiptStore
-export type PermissionTerminal = PermissionGrant.Terminal
-export type PermissionTransaction = PermissionGrant.Transaction
 export type RbxmClass = Rbxm.Class
 export type RbxmDocument = Rbxm.Document
 export type RbxmInstance = Rbxm.Instance
@@ -91,6 +75,5 @@ return {
 		instancePath = Rbxm.instancePath,
 		isBinary = Rbxm.isBinary,
 	},
-	referenceProvenance = { record = ReferenceProvenance.record },
 	units = Units,
 }

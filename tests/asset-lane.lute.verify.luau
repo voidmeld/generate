@@ -1,9 +1,9 @@
 --!strict
 
 local json = require "@std/json"
+local Lute = require "../.lute/dependencies/verify/src/lute"
 
 local Roblox = require "../src/roblox"
-local ReferenceInternal = require "../src/roblox/reference-provenance"
 local RbxmInternal = require "../src/roblox/rbxm"
 local PermissionTypes = require "../src/roblox/permission-grant"
 local Test = require "./harness"
@@ -12,7 +12,6 @@ local describe, it, expect = Test.describe, Test.it, Test.expect
 
 local Readback = Roblox.assetReadback
 local Permission = Roblox.permissionGrant
-local Reference = Roblox.referenceProvenance
 local Audit = Roblox.assetAudit
 local Rbxm = RbxmInternal
 
@@ -23,7 +22,7 @@ local function decode(body: string): unknown
 end
 
 local function encode(value: unknown): string
-	return json.serialize(value :: json.Value)
+	return Lute.encode(value)
 end
 
 local function digest(bytes: string): string
@@ -135,7 +134,7 @@ describe("Roblox.assetReadback", function()
 			decode = decode,
 			owner = OWNER,
 			send = function(request: Roblox.CloudRequest): Roblox.CloudResponse
-				local id = string.match(request.url, "(%d+)$") :: string
+				local id = assert(string.match(request.url, "(%d+)$"))
 				table.insert(seen, id)
 				return record({
 					assetId = id,
@@ -166,11 +165,11 @@ describe("Roblox.permissionGrant subject authority", function()
 		}
 	end
 
-	local function authority(answers: unknown): Roblox.PermissionAuthorityOptions
+	local function authority(answers: { [string]: unknown }): Roblox.PermissionAuthorityOptions
 		return {
 			decode = decode,
 			send = function(request: Roblox.CloudRequest): Roblox.CloudResponse
-				for fragment, value in answers :: { [string]: unknown } do
+				for fragment, value in answers do
 					if string.find(request.url, fragment, 1, true) ~= nil then
 						return record(value, 200)
 					end
@@ -183,7 +182,9 @@ describe("Roblox.permissionGrant subject authority", function()
 	it("refuses malformed credential identity fields before reading authority", function()
 		for _, name in { "decision", "operation", "nonce", "freezeCommit" } do
 			local value: { [string]: unknown } = {}
-			for key, field in credential { "write" } do
+			local original: unknown = credential { "write" }
+			assert(type(original) == "table")
+			for key, field in original do
 				assert(type(key) == "string")
 				value[key] = field
 			end
@@ -263,613 +264,6 @@ describe("Roblox.permissionGrant subject authority", function()
 	end)
 end)
 
-describe("Roblox.permissionGrant census", function()
-	local function row(assetId: string, creatorType: string, creatorId: string, state: string): Roblox.AssetRecord
-		return {
-			assetId = assetId,
-			path = "",
-			assetType = "unknown",
-			displayName = "",
-			ownedByDeclaredCreator = false,
-			foreignOwnershipPossible = true,
-			privacy = "unknown",
-			revisionId = "",
-			creatorType = creatorType,
-			creatorId = creatorId,
-			moderationState = state,
-			state = "Active",
-			status = 200,
-			diagnostic = "",
-			source = Readback.SOURCES.record,
-		}
-	end
-
-	it("partitions owned, external, and foreign-group rows", function()
-		local partition = Permission.census({
-			row("1", "Group", "4242", "Approved"),
-			row("2", "User", "9", "Active"),
-			row("3", "Group", "77", "Approved"),
-		}, OWNER)
-		expect(partition.grantAssetIds[1]):toBe "1"
-		expect(partition.externalAssetIds[1]):toBe "2"
-		expect(#partition.foreignOwned):toBe(1)
-		expect(partition.closed):toBe(false)
-	end)
-
-	it("holds a row whose moderation state is not approved", function()
-		local partition = Permission.census({ row("1", "Group", "4242", "Reviewing") }, OWNER)
-		expect(#partition.unresolved):toBe(1)
-		expect(partition.closed):toBe(false)
-	end)
-
-	it("closes on a wholly owned and approved set", function()
-		local partition = Permission.census({ row("1", "Group", "4242", "Approved") }, OWNER)
-		expect(partition.closed):toBe(true)
-	end)
-end)
-
-describe("Roblox.permissionGrant transaction", function()
-	local function store(): (Roblox.PermissionReceiptStore, { [string]: string })
-		local files: { [string]: string } = {}
-		return {
-			read = function(path: string): string?
-				return files[path]
-			end,
-			write = function(path: string, bytes: string)
-				files[path] = bytes
-			end,
-			list = function(root: string): { string }
-				local paths: { string } = {}
-				for path in files do
-					if string.sub(path, 1, #root) == root then
-						table.insert(paths, path)
-					end
-				end
-				table.sort(paths)
-				return paths
-			end,
-			ensure = function() end,
-		},
-			files
-	end
-
-	local function transaction(
-		receipts: Roblox.PermissionReceiptStore,
-		assetIds: { string },
-		attempt: (prepared: Roblox.PermissionPrepared) -> PermissionTypes.AttemptResult
-	): Roblox.PermissionTransaction
-		return {
-			store = receipts,
-			encode = encode,
-			decode = decode,
-			digest = digest,
-			contract = "example.permissions.v1",
-			outputRoot = "receipts",
-			universeId = "10",
-			owner = OWNER,
-			sourceCommit = string.rep("a", 40),
-			closureSha256 = "closure",
-			grantAssetIds = assetIds,
-			chunkSize = 2,
-			context = { channel = "example" },
-			destination = {
-				endpoint = "https://example.invalid/permissions",
-				method = "PATCH",
-				headerNames = { "Accept", "Content-Type", "x-api-key" },
-			},
-			terminal = {
-				status = "PATCH_COMPLETE_AWAITING_PROOF",
-				reason = "delivery proof pending",
-				message = "patch complete; delivery proof pending",
-			},
-			prepare = function(_universeId: string, ids: { string }): Roblox.PermissionPrepared
-				return {
-					endpoint = "https://example.invalid/permissions",
-					method = "PATCH",
-					body = "body:" .. table.concat(ids, ","),
-					headerNames = { "Accept", "Content-Type", "x-api-key" },
-					requestedAssetIds = ids,
-				}
-			end,
-			attempt = attempt,
-		}
-	end
-
-	it("writes a write-ahead before every attempted chunk and a terminal after it", function()
-		local receipts, files = store()
-		local calls = 0
-		local receipt, reason =
-			Permission.grant(transaction(receipts, { "1", "2", "3" }, function(): PermissionTypes.AttemptResult
-				calls += 1
-				return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-			end))
-		expect(calls):toBe(2)
-		expect(reason):toBe "patch complete; delivery proof pending"
-		expect(assert(receipt).status):toBe "PATCH_COMPLETE_AWAITING_PROOF"
-		expect(assert(receipt).reason):toBe "delivery proof pending"
-		expect(assert(assert(receipt).outboundDestination).endpoint):toBe "https://example.invalid/permissions"
-		local writeAheads = 0
-		for path in files do
-			if string.find(path, "write-ahead", 1, true) ~= nil then
-				writeAheads += 1
-			end
-		end
-		expect(writeAheads):toBe(2)
-	end)
-
-	it("holds at the failing chunk instead of continuing", function()
-		local receipts = store()
-		local calls = 0
-		local receipt, reason =
-			Permission.grant(transaction(receipts, { "1", "2", "3" }, function(): PermissionTypes.AttemptResult
-				calls += 1
-				if calls == 1 then
-					return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-				end
-				return {
-					status = 500,
-					successAssetIds = {},
-					complete = false,
-					diagnostic = "refused",
-					responseBody = "",
-				}
-			end))
-		expect(calls):toBe(2)
-		expect(assert(receipt).status):toBe "HOLD"
-		expect(string.find(reason, "resume at chunk 2", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("resumes valid persisted chunks without repeating a granted chunk", function()
-		local receipts = store()
-		local calls = 0
-		local plan = transaction(receipts, { "1", "2", "3" }, function(): PermissionTypes.AttemptResult
-			calls += 1
-			return {
-				status = if calls == 2 then 500 else 200,
-				successAssetIds = {},
-				complete = calls ~= 2,
-				diagnostic = "",
-				responseBody = "",
-			}
-		end)
-		local first = assert(Permission.grant(plan))
-		expect(first.status):toBe "HOLD"
-		local resumed = assert(Permission.grant(plan))
-		expect(resumed.status):toBe "PATCH_COMPLETE_AWAITING_PROOF"
-		expect(calls):toBe(3)
-		expect(#assert(resumed.chunkOutcomes)):toBe(2)
-	end)
-
-	it("refuses malformed persisted chunk field shapes before another attempt", function()
-		local mutations: { (value: { [string]: unknown }) -> () } = {
-			function(value)
-				value.sourceCommit = 12
-			end,
-			function(value)
-				(value.chunk :: { [string]: unknown }).attempt = "first"
-			end,
-			function(value)
-				(value.patch :: { [string]: unknown }).status = "retry"
-			end,
-			function(value)
-				(value.patch :: { [string]: unknown }).successAssetIds = { false }
-			end,
-			function(value)
-				local outcome = value.chunkOutcome :: { [string]: unknown }
-				(outcome.patch :: { [string]: unknown }).responseBody = false
-			end,
-		}
-		for _, mutate in mutations do
-			local receipts, files = store()
-			local calls = 0
-			local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-				calls += 1
-				return { status = 500, successAssetIds = {}, complete = false, diagnostic = "retry", responseBody = "" }
-			end)
-			local first = assert(Permission.grant(plan))
-			local path = assert(first.terminalPath)
-			local value = decode(files[path]) :: { [string]: unknown }
-			mutate(value)
-			files[path] = encode(value)
-			local receipt, reason = Permission.grant(plan)
-			expect(receipt):toBe(nil)
-			expect(string.find(reason, "chunk receipt is malformed", 1, true) ~= nil):toBe(true)
-			expect(calls):toBe(1)
-		end
-	end)
-
-	it("refuses a retry once the transaction has a durable terminal receipt", function()
-		local receipts = store()
-		local function run(): (PermissionTypes.Receipt?, string)
-			return Permission.grant(transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-				return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-			end))
-		end
-		run()
-		local receipt, reason = run()
-		expect(receipt):toBe(nil)
-		expect(reason):toBe "transaction already has durable state; retry refused"
-	end)
-
-	it("refuses an outbound request that does not bind the ordered chunk", function()
-		local receipts = store()
-		local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-			return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-		end)
-		plan.prepare = function(): Roblox.PermissionPrepared
-			return {
-				endpoint = "https://example.invalid/permissions",
-				method = "PATCH",
-				body = "body",
-				headerNames = { "Accept" },
-				requestedAssetIds = { "9" },
-			}
-		end
-		local receipt, reason = Permission.grant(plan)
-		expect(receipt):toBe(nil)
-		expect(string.find(reason, "outbound request preparation refused", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses an outbound request whose header names differ from the destination contract", function()
-		local receipts = store()
-		local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-			return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-		end)
-		plan.prepare = function(_universeId: string, ids: { string }): Roblox.PermissionPrepared
-			return {
-				endpoint = "https://example.invalid/permissions",
-				method = "PATCH",
-				body = "body",
-				headerNames = { "Accept", "Content-Type", "Authorization" },
-				requestedAssetIds = ids,
-			}
-		end
-		local receipt, reason = Permission.grant(plan)
-		expect(receipt):toBe(nil)
-		expect(string.find(reason, "outbound request preparation refused", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses an outbound request whose endpoint differs from the destination contract", function()
-		local receipts = store()
-		local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-			return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-		end)
-		plan.prepare = function(_universeId: string, ids: { string }): Roblox.PermissionPrepared
-			return {
-				endpoint = "https://elsewhere.invalid/permissions",
-				method = "PATCH",
-				body = "body",
-				headerNames = { "Accept", "Content-Type", "x-api-key" },
-				requestedAssetIds = ids,
-			}
-		end
-		local receipt, reason = Permission.grant(plan)
-		expect(receipt):toBe(nil)
-		expect(string.find(reason, "outbound request preparation refused", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses a transaction that carries no destination contract", function()
-		local receipts = store()
-		local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-			return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-		end)
-		plan.destination = (nil :: unknown) :: Roblox.PermissionDestination
-		local receipt, reason = Permission.grant(plan)
-		expect(receipt):toBe(nil)
-		expect(reason):toBe "destination contract is malformed"
-	end)
-
-	it("refuses a transaction that carries no terminal contract", function()
-		local receipts = store()
-		local plan = transaction(receipts, { "1" }, function(): PermissionTypes.AttemptResult
-			return { status = 200, successAssetIds = {}, complete = true, diagnostic = "", responseBody = "" }
-		end)
-		plan.terminal = (nil :: unknown) :: Roblox.PermissionTerminal
-		local receipt, reason = Permission.grant(plan)
-		expect(receipt):toBe(nil)
-		expect(reason):toBe "terminal contract is malformed"
-	end)
-
-	it("chunks the grant set in declared order", function()
-		local planned = Permission.chunks({ "1", "2", "3", "4", "5" }, 2)
-		expect(#planned):toBe(3)
-		expect(planned[3][1]):toBe "5"
-	end)
-end)
-
-describe("Roblox.referenceProvenance", function()
-	local MANIFEST = table.concat({
-		"{",
-		'  "reference_images": {},',
-		'  "assets": {}',
-		"}",
-	}, "\n")
-
-	local function config(): Roblox.ReferenceConfig
-		return {
-			owner = OWNER,
-			sections = { "reference_images", "assets" },
-			referenceSection = "reference_images",
-			manifestPath = "manifest.json",
-			renderedPath = "baked.luau",
-			lineagePath = "lineage.luau",
-			referenceRoot = "refart/",
-			render = function(): string
-				return "baked"
-			end,
-		}
-	end
-
-	local function codecs(): Roblox.ReferenceCodecs
-		return { decode = decode, encode = encode, digest = digest }
-	end
-
-	local function files(
-		text: string,
-		overrides: { [string]: string }?,
-		list: ((string) -> { string })?
-	): Roblox.ReferenceFiles
-		local present: { [string]: string } = {
-			["manifest.json"] = text,
-			["baked.luau"] = "baked",
-			["lineage.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", date = "d", sha256 = "0001b229"',
-			["refart/image.png"] = "png",
-			["prompts/image.txt"] = "prompt text",
-			["receipts/verdict.json"] = "verdict",
-		}
-		if overrides ~= nil then
-			for path, value in overrides do
-				present[path] = value
-			end
-		end
-		return {
-			read = function(path: string): string
-				return present[path] or error("absent " .. path)
-			end,
-			write = function(path: string, bytes: string)
-				present[path] = bytes
-			end,
-			exists = function(path: string): boolean
-				return present[path] ~= nil
-			end,
-			list = list,
-		}
-	end
-
-	local function draft(): Roblox.ReferenceDraft
-		return {
-			key = "image",
-			committedPath = "refart/image.png",
-			promptPath = "prompts/image.txt",
-			reviewerVerdictIds = { "reviewer-a" },
-			reviewerVerdictReceipt = "receipts/verdict.json",
-			reviewerVerdictAnchor = "anchor",
-			disposition = "reference_only",
-			imageAssetId = 77,
-			sourceAssetId = 78,
-			readbackReceipt = "receipts/verdict.json",
-			readback = {
-				assetId = "77",
-				creatorType = "Group",
-				creatorId = "4242",
-				moderationState = "Approved",
-				closed = true,
-			},
-		}
-	end
-
-	it("records a reference row with one reviewer receipt", function()
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), draft())
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).image_asset_id):toBe(77)
-		expect(assert(outcome.row).source_sha256):toBe "0001b229"
-		expect(assert(outcome.row).generation_tool):toBe "t"
-		expect(outcome.rowCount):toBe(1)
-	end)
-
-	it("refuses missing, extra and duplicate reviewer verdicts", function()
-		for _, ids in { {}, { "reviewer-a", "reviewer-b" }, { "reviewer-a", "reviewer-a" } } do
-			local candidate = draft()
-			candidate.reviewerVerdictIds = ids
-			local outcome = Reference.record(config(), codecs(), files(MANIFEST), candidate)
-			expect(outcome.diagnostic):toContain "exactly one independent reviewer verdict id"
-			expect(outcome.row):toBe(nil)
-		end
-	end)
-
-	it("refuses an empty reviewer identity", function()
-		local unnamed = draft()
-		unnamed.reviewerVerdictIds = { "" }
-		expect(Reference.record(config(), codecs(), files(MANIFEST), unnamed).diagnostic):toContain "non-empty string"
-	end)
-
-	it("refuses a readback that does not prove the declared creator", function()
-		local foreign = draft()
-		foreign.readback.creatorId = "1"
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), foreign)
-		expect(outcome.diagnostic):toBe "the readback does not prove the declared creator"
-	end)
-
-	it("refuses a receipt path that no fresh checkout carries", function()
-		local ignored = draft()
-		ignored.readbackReceipt = ".local/verdict.json"
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), ignored)
-		expect(string.find(outcome.diagnostic, "is not a committed path", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses a reference image outside the declared reference root", function()
-		local outside = draft()
-		outside.committedPath = "elsewhere/image.png"
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), outside)
-		expect(string.find(outcome.diagnostic, "absent", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("never overwrites an existing key", function()
-		local occupied = table.concat({
-			"{",
-			'  "reference_images": {',
-			'    "image": { "id": "image" }',
-			"  },",
-			'  "assets": {}',
-			"}",
-		}, "\n")
-		local outcome = Reference.record(config(), codecs(), files(occupied), draft())
-		expect(string.find(outcome.diagnostic, "never overwritten", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("holds the whole act when the renderer no longer reproduces the tracked table", function()
-		local drifting = config()
-		drifting.render = function(): string
-			return "drifted"
-		end
-		local outcome = Reference.record(drifting, codecs(), files(MANIFEST), draft())
-		expect(string.find(outcome.diagnostic, "no longer reproduces", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses a reference image that claims the terminal disposition before its model exists", function()
-		local terminal = draft()
-		terminal.disposition = "accepted"
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), terminal)
-		expect(string.find(outcome.diagnostic, "terminal disposition", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses a reference image whose committed bytes do not match the lineage row's sha256", function()
-		local outcome = Reference.record(
-			config(),
-			codecs(),
-			files(MANIFEST, {
-				["lineage.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", date = "d", sha256 = "deadbeef"',
-			}),
-			draft()
-		)
-		expect(string.find(outcome.diagnostic, "do not match the lineage row's sha256", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("resolves the reference image's row across a declared list of lineage files", function()
-		local multi = config()
-		multi.lineagePath = { "lineage-a.luau", "lineage-b.luau" }
-		local outcome = Reference.record(
-			multi,
-			codecs(),
-			files(MANIFEST, {
-				["lineage-a.luau"] = 'source_path = "refart/other.png", tool = "t", model = "m", date = "d", sha256 = "0"',
-				["lineage-b.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", date = "d", sha256 = "0001b229"',
-			}),
-			draft()
-		)
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).lineage_path):toBe "lineage-b.luau"
-	end)
-
-	it("refuses with the searched list when no lineage file names the reference image", function()
-		local multi = config()
-		multi.lineagePath = { "lineage-a.luau", "lineage-b.luau" }
-		local outcome = Reference.record(
-			multi,
-			codecs(),
-			files(MANIFEST, {
-				["lineage-a.luau"] = 'source_path = "refart/other.png", tool = "t", model = "m", date = "d", sha256 = "0"',
-				["lineage-b.luau"] = 'source_path = "refart/another.png", tool = "t", model = "m", date = "d", sha256 = "0"',
-			}),
-			draft()
-		)
-		expect(string.find(outcome.diagnostic, "no lineage file names a row", 1, true) ~= nil):toBe(true)
-		expect(string.find(outcome.diagnostic, "lineage-a.luau", 1, true) ~= nil):toBe(true)
-		expect(string.find(outcome.diagnostic, "lineage-b.luau", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("refuses when two lineage files name the same plate", function()
-		local multi = config()
-		multi.lineagePath = { "lineage-a.luau", "lineage-b.luau" }
-		local row = 'source_path = "refart/image.png", tool = "t", model = "m", date = "d", sha256 = "0001b229"'
-		local outcome = Reference.record(
-			multi,
-			codecs(),
-			files(MANIFEST, { ["lineage-a.luau"] = row, ["lineage-b.luau"] = row }),
-			draft()
-		)
-		expect(string.find(outcome.diagnostic, "more than one lineage file names a row", 1, true) ~= nil):toBe(true)
-		expect(string.find(outcome.diagnostic, "lineage-a.luau", 1, true) ~= nil):toBe(true)
-		expect(string.find(outcome.diagnostic, "lineage-b.luau", 1, true) ~= nil):toBe(true)
-	end)
-
-	it("resolves the reference image's row across a lineage directory via files.list", function()
-		local dirConfig = config()
-		dirConfig.lineagePath = "lineage-dir"
-		local outcome = Reference.record(
-			dirConfig,
-			codecs(),
-			files(MANIFEST, {
-				["lineage-dir/a.luau"] = 'source_path = "refart/other.png", tool = "t", model = "m", date = "d", sha256 = "0"',
-				["lineage-dir/b.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", date = "d", sha256 = "0001b229"',
-			}, function(root: string): { string }
-				expect(root):toBe "lineage-dir"
-				return { "lineage-dir/a.luau", "lineage-dir/b.luau" }
-			end),
-			draft()
-		)
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).lineage_path):toBe "lineage-dir/b.luau"
-	end)
-
-	it("banks a lineage row's inline prompt as the prompt of record", function()
-		local inline = draft()
-		inline.promptPath = nil
-		local outcome = Reference.record(
-			config(),
-			codecs(),
-			files(MANIFEST, {
-				["lineage.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", prompt = "inline prompt text", date = "d", sha256 = "0001b229"',
-			}),
-			inline
-		)
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).prompt):toBe "inline prompt text"
-		expect(assert(outcome.row).prompt_path):toBe(nil)
-		expect(assert(outcome.row).prompt_sha256):toBe(digest "inline prompt text")
-	end)
-
-	it("reads an inline lineage prompt written as a long-bracket string", function()
-		local inline = draft()
-		inline.promptPath = nil
-		local outcome = Reference.record(
-			config(),
-			codecs(),
-			files(MANIFEST, {
-				["lineage.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", prompt = [[line one\nline "two"]], date = "d", sha256 = "0001b229"',
-			}),
-			inline
-		)
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).prompt):toBe 'line one\nline "two"'
-		expect(assert(outcome.row).prompt_sha256):toBe(digest 'line one\nline "two"')
-	end)
-
-	it("reads an inline lineage prompt written with a `[=[` long-bracket level", function()
-		local inline = draft()
-		inline.promptPath = nil
-		local outcome = Reference.record(
-			config(),
-			codecs(),
-			files(MANIFEST, {
-				["lineage.luau"] = 'source_path = "refart/image.png", tool = "t", model = "m", prompt = [=[a "quoted" [[nested]] prompt]=], date = "d", sha256 = "0001b229"',
-			}),
-			inline
-		)
-		expect(outcome.diagnostic):toBe ""
-		expect(assert(outcome.row).prompt):toBe 'a "quoted" [[nested]] prompt'
-	end)
-
-	it("refuses a draft with neither a prompt path nor an inline lineage prompt", function()
-		local neither = draft()
-		neither.promptPath = nil
-		local outcome = Reference.record(config(), codecs(), files(MANIFEST), neither)
-		expect(string.find(outcome.diagnostic, "committed prompt path or an inline lineage prompt", 1, true) ~= nil):toBe(
-			true
-		)
-	end)
-end)
-
 describe("Roblox.assetAudit", function()
 	local CONFIG: Roblox.AssetAuditConfig = {
 		referenceSection = "references",
@@ -879,7 +273,7 @@ describe("Roblox.assetAudit", function()
 		eligibilityFields = { "eligible_primary", "eligible_secondary" },
 	}
 
-	local function files(tree: { [string]: string }): Roblox.ReferenceFiles
+	local function files(tree: { [string]: string }): Roblox.AssetAuditFiles
 		return {
 			read = function(path: string): string
 				return tree[path] or error("absent: " .. path)
@@ -891,7 +285,7 @@ describe("Roblox.assetAudit", function()
 		}
 	end
 
-	local function reference(overrides: unknown): Roblox.AssetAuditReference
+	local function reference(overrides: { [string]: unknown }): Roblox.AssetAuditReference
 		local row: Roblox.AssetAuditReference = {
 			committed_source_path = "assets/image.png",
 			source_sha256 = digest "image",
@@ -909,13 +303,13 @@ describe("Roblox.assetAudit", function()
 			rights_basis = "owned",
 			disposition = "accepted",
 		}
-		for key, value in overrides :: { [string]: unknown } do
+		for key, value in overrides do
 			row[key] = value
 		end
 		return row
 	end
 
-	local function model(overrides: unknown): Roblox.AssetAuditModel
+	local function model(overrides: { [string]: unknown }): Roblox.AssetAuditModel
 		local row: Roblox.AssetAuditModel = {
 			reference_sha256 = digest "image",
 			reference_image_asset_id = 77,
@@ -923,7 +317,7 @@ describe("Roblox.assetAudit", function()
 			comparison_verdict_receipt = "ops/ab.json",
 			model_uuid = "uuid-1",
 		}
-		for key, value in overrides :: { [string]: unknown } do
+		for key, value in overrides do
 			row[key] = value
 		end
 		return row
@@ -1022,23 +416,11 @@ describe("Roblox.assetAudit", function()
 		expect(found[1]):toBe 'references["first_row"] grants eligibility without the terminal disposition and owned rights'
 	end)
 
-	it("reports a gitignored path and a baker that no longer reproduces the tracked table", function()
-		expect(ReferenceInternal.hiddenPath ".ops/receipt.json"):toBe(true)
-		expect(ReferenceInternal.hiddenPath "ops/receipt.json"):toBe(false)
-		local config = {
-			render = function(): string
-				return "baked"
-			end,
-		}
-		expect(ReferenceInternal.rendererParity(config, { decode = decode }, "{}", "baked")):toBe(nil)
-		expect(ReferenceInternal.rendererParity(config, { decode = decode }, "{}", "stale") ~= nil):toBe(true)
-	end)
-
 	it("refuses an input that carries no file reader", function()
-		local ok = pcall(function()
-			local input: unknown = { config = CONFIG, digest = digest, references = {}, models = {} }
-			Audit.referenceViolations(input :: Roblox.AssetAuditInput)
-		end)
+		local ok = Test.protectedCall(
+			Audit.referenceViolations,
+			{ config = CONFIG, digest = digest, references = {}, models = {} }
+		)
 		expect(ok):toBe(false)
 	end)
 end)

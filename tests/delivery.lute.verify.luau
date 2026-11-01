@@ -2,9 +2,11 @@
 
 local crypto = require "@lute/crypto"
 local json = require "@std/json"
+local Lute = require "../.lute/dependencies/verify/src/lute"
 
 local Roblox = require "../src/roblox"
 local Test = require "./harness"
+local field = require("../src/roblox/wire").field
 
 local describe, it, expect = Test.describe, Test.it, Test.expect
 
@@ -39,7 +41,7 @@ type Rig = {
 local function approvedAsset(creator: { groupId: string?, userId: string? }?, state: string?): Scripted
 	return {
 		status = 200,
-		body = json.serialize {
+		body = Lute.encode {
 			assetId = "12345",
 			revisionId = "7",
 			assetType = "Image",
@@ -50,11 +52,11 @@ local function approvedAsset(creator: { groupId: string?, userId: string? }?, st
 end
 
 local function operationDone(): Scripted
-	return { status = 200, body = json.serialize { done = true, response = { assetId = "12345" } } }
+	return { status = 200, body = Lute.encode { done = true, response = { assetId = "12345" } } }
 end
 
 local function created(): Scripted
-	return { status = 200, body = json.serialize { path = "operations/1234-abcd" } }
+	return { status = 200, body = Lute.encode { path = "operations/1234-abcd" } }
 end
 
 local function rig(options: { creator: Roblox.DeliveryCreator?, polls: number? }?): Rig
@@ -87,7 +89,7 @@ local function rig(options: { creator: Roblox.DeliveryCreator?, polls: number? }
 			sha256 = sha256,
 			json = {
 				encode = function(value: unknown): string
-					return json.serialize(value :: json.Value)
+					return Lute.encode(value)
 				end,
 				decode = json.deserialize,
 			},
@@ -154,19 +156,18 @@ describe("file upload", function()
 			model.label = "models/fixture." .. format
 			model.format = format
 			r.push(created())
-			r.push { status = 200, body = json.serialize { done = false } }
+			r.push { status = 200, body = Lute.encode { done = false } }
 			expect(Delivery.upload(r.config, model).reason):toBe "pending"
 			local body = assert(r.requests[1].body)
 			expect(string.find(body, 'filename="asset.' .. format .. '"', 1, true) ~= nil):toBe(true)
 			expect(string.find(body, "Content-Type: " .. contentType .. "\r\n", 1, true) ~= nil):toBe(true)
 			expect(string.find(body, BYTES, 1, true) ~= nil):toBe(true)
-			local envelope =
-				json.deserialize(assert(string.match(body, "application/json\r\n\r\n(.-)\r\n%-%-"))) :: { assetType: string }
-			expect(envelope.assetType):toBe "Model"
+			local envelope = json.deserialize(assert(string.match(body, "application/json\r\n\r\n(.-)\r\n%-%-")))
+			expect(field(envelope, "assetType")):toBe "Model"
 			r.push(operationDone())
 			r.push {
 				status = 200,
-				body = json.serialize {
+				body = Lute.encode {
 					assetId = "12345",
 					revisionId = "7",
 					assetType = "Model",
@@ -183,7 +184,7 @@ describe("file upload", function()
 	end
 
 	it("holds malformed readback field shapes without approving delivery", function()
-		local cases: { { field: string, value: json.Value } } = {
+		local cases: { { field: string, value: unknown } } = {
 			{ field = "creationContext", value = "context" },
 			{ field = "creationContext", value = { creator = false } },
 			{ field = "creationContext", value = { creator = { groupId = false } } },
@@ -193,7 +194,7 @@ describe("file upload", function()
 		}
 		for _, case in cases do
 			local r = rig()
-			local body: { [string]: json.Value } = {
+			local body: { [string]: unknown } = {
 				assetId = "12345",
 				assetType = "Image",
 				creationContext = { creator = { groupId = "1234567" } },
@@ -202,7 +203,7 @@ describe("file upload", function()
 			body[case.field] = case.value
 			r.push(created())
 			r.push(operationDone())
-			r.push { status = 200, body = json.serialize(body) }
+			r.push { status = 200, body = Lute.encode(body) }
 			local outcome = Delivery.upload(r.config, request())
 			expect(outcome.verdict):toBe "hold"
 			expect(outcome.reason):toBe "malformed"
@@ -222,21 +223,19 @@ describe("file upload", function()
 		expect(r.posts()):toBe(1)
 		local post = r.requests[1]
 		expect(post.url):toBe "https://apis.roblox.com/assets/v1/assets"
-		local envelope = json.deserialize(
-			string.match(post.body or "", "application/json\r\n\r\n(.-)\r\n%-%-") :: string
-		) :: { creationContext: { creator: { groupId: string?, userId: string? }, assetPrivacy: string } }
-		expect(envelope.creationContext.creator.groupId):toBe "1234567"
-		expect(envelope.creationContext.creator.userId):toBeNil()
-		expect(envelope.creationContext.assetPrivacy):toBe "restricted"
+		local envelope = json.deserialize(assert(string.match(post.body or "", "application/json\r\n\r\n(.-)\r\n%-%-")))
+		expect(field(field(field(envelope, "creationContext"), "creator"), "groupId")):toBe "1234567"
+		expect(field(field(field(envelope, "creationContext"), "creator"), "userId")):toBeNil()
+		expect(field(field(envelope, "creationContext"), "assetPrivacy")):toBe "restricted"
 		expect(string.find(post.body or "", BYTES, 1, true) ~= nil):toBe(true)
 		local record = r.records[DIGEST]
 		expect(record.sha256):toBe(DIGEST)
 		expect(record.source):toBe "icons/fixture.png"
-		expect((record.review :: Roblox.DeliveryReview).by):toBe "reviewer"
+		expect(assert(record.review).by):toBe "reviewer"
 		expect(record.operation):toBe "operations/1234-abcd"
 		expect(record.assetId):toBe "12345"
 		expect(record.version):toBe "7"
-		expect((string.find(json.serialize(record), SECRET, 1, true))):toBeNil()
+		expect((string.find(Lute.encode(record), SECRET, 1, true))):toBeNil()
 	end)
 
 	it("addresses a user creator only when the consumer names one and never falls back", function()
@@ -245,11 +244,10 @@ describe("file upload", function()
 		r.push(operationDone())
 		r.push(approvedAsset { userId = "42" })
 		expect(Delivery.upload(r.config, request()).verdict):toBe "approved"
-		local envelope = json.deserialize(
-			string.match(r.requests[1].body or "", "application/json\r\n\r\n(.-)\r\n%-%-") :: string
-		) :: { creationContext: { creator: { groupId: string?, userId: string? }, assetPrivacy: string } }
-		expect(envelope.creationContext.creator.userId):toBe "42"
-		expect(envelope.creationContext.creator.groupId):toBeNil()
+		local envelope =
+			json.deserialize(assert(string.match(r.requests[1].body or "", "application/json\r\n\r\n(.-)\r\n%-%-")))
+		expect(field(field(field(envelope, "creationContext"), "creator"), "userId")):toBe "42"
+		expect(field(field(field(envelope, "creationContext"), "creator"), "groupId")):toBeNil()
 		local missing = rig { creator = { kind = "group", id = "" } }
 		local outcome = Delivery.upload(missing.config, request())
 		expect(outcome.reason):toBe "invalid"
@@ -339,9 +337,9 @@ describe("file upload", function()
 	it("resumes an interrupted upload from its operation without a second create", function()
 		local r = rig { polls = 3 }
 		r.push(created())
-		r.push { status = 200, body = json.serialize { done = false } }
-		r.push { status = 200, body = json.serialize { done = false } }
-		r.push { status = 200, body = json.serialize { done = false } }
+		r.push { status = 200, body = Lute.encode { done = false } }
+		r.push { status = 200, body = Lute.encode { done = false } }
+		r.push { status = 200, body = Lute.encode { done = false } }
 		local first = Delivery.upload(r.config, request())
 		expect(first.verdict):toBe "hold"
 		expect(first.reason):toBe "pending"
@@ -396,7 +394,29 @@ describe("file upload", function()
 		r.push(operationDone())
 		r.push(approvedAsset())
 		Delivery.upload(r.config, request())
-		expect((r.records[DIGEST].authority :: Roblox.DeliveryAuthority).operatorId):toBe(7)
+		expect(assert(r.records[DIGEST].authority).operatorId):toBe(7)
+	end)
+
+	it("isolates durable records from caller and result mutations", function()
+		local r = rig()
+		local nested = { decision = "authorized" }
+		r.config.authorize = function(): (Roblox.DeliveryAuthority?, string?)
+			return { nested = nested }, nil
+		end
+		r.push(created())
+		r.push(operationDone())
+		r.push(approvedAsset())
+		local outcome = Delivery.upload(r.config, request())
+		local saved = r.records[DIGEST]
+		local returned = assert(outcome.record)
+		nested.decision = "caller mutation"
+		assert(returned.creator).id = "1"
+		assert(returned.review).by = "result mutation"
+		expect(field(returned.authority, "nested") == field(saved.authority, "nested")):toBe(false)
+		assert(returned.authority).nested = "result mutation"
+		expect(field(field(saved.authority, "nested"), "decision")):toBe "authorized"
+		expect(assert(saved.creator).id):toBe(GROUP.id)
+		expect(assert(saved.review).by):toBe "reviewer"
 	end)
 end)
 
@@ -551,8 +571,8 @@ describe("native save", function()
 		expect(outcome.assetId):toBe "555"
 		expect(outcome.version):toBe "9"
 		expect(calls.create):toBe(1)
-		expect((r.records["model-1"].identity :: { [string]: string }).source):toBe "workshop/fixture"
-		expect((r.records["model-1"].review :: Roblox.DeliveryReview).by):toBe "reviewer"
+		expect(assert(r.records["model-1"].identity).source):toBe "workshop/fixture"
+		expect(assert(r.records["model-1"].review).by):toBe "reviewer"
 	end)
 
 	it("resumes a saved id by readback without creating again", function()
@@ -615,10 +635,14 @@ describe("native save", function()
 		}
 		local http: Roblox.DeliveryAttributeJson = {
 			JSONEncode = function(_self: Roblox.DeliveryAttributeJson, value: Roblox.DeliveryRecord): string
-				return json.serialize(value)
+				return Lute.encode(value)
 			end,
 			JSONDecode = function(_self: Roblox.DeliveryAttributeJson, text: string): Roblox.DeliveryRecord
-				return json.deserialize(text) :: Roblox.DeliveryRecord
+				local decoded = json.deserialize(text)
+				local attempt, assetId = field(decoded, "attempt"), field(decoded, "assetId")
+				assert(type(attempt) == "string")
+				assert(assetId == nil or type(assetId) == "string")
+				return { attempt = attempt, assetId = assetId }
 			end,
 		}
 		local store = Delivery.native.attributeStore(instance, http)

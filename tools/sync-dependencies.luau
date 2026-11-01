@@ -2,20 +2,20 @@
 local fs = require "@std/fs"
 local process = require "@lute/process"
 type Dependency = {
-	name: string,
-	repository: string,
-	commit: string,
-	tree: string,
-	rights: string,
-	surfaces: { { root: string, role: "runtime" | "tooling" | "verification" } },
+	read name: string,
+	read repository: string,
+	read commit: string,
+	read tree: string,
+	read rights: string,
+	read surfaces: { { root: string, role: string } },
 }
 type Lock = {
-	schemaVersion: number,
-	dependencies: { Dependency },
+	read schemaVersion: number,
+	read dependencies: { Dependency },
 }
 local CACHE_ROOT = ".lute/dependencies"
 local REQUIRED_RIGHTS = "MIT"
-local lock = require "../dependencies.lock" :: Lock
+local lock: Lock = require "../dependencies.lock"
 local function trim(value: string): string
 	return string.match(value, "^%s*(.-)%s*$") or ""
 end
