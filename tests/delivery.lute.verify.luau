@@ -183,6 +183,139 @@ describe("file upload", function()
 		end)
 	end
 
+	local function instanceRequest(assetType: string?): Roblox.DeliveryUpload
+		local value = request()
+		value.label = "models/fixture.rbxm"
+		value.format = "rbxm"
+		value.assetType = assetType
+		return value
+	end
+
+	local function readback(assetType: string): Scripted
+		return {
+			status = 200,
+			body = Lute.encode {
+				assetId = "12345",
+				revisionId = "7",
+				assetType = assetType,
+				creationContext = { creator = { groupId = "1234567" } },
+				moderationResult = { moderationState = "Approved" },
+			},
+		}
+	end
+
+	local function envelopeOf(body: string): unknown
+		return json.deserialize(assert(string.match(body, "application/json\r\n\r\n(.-)\r\n%-%-")))
+	end
+
+	it("sends rbxm as an Animation under the bare digest key when no asset type is given", function()
+		local r = rig()
+		r.push(created())
+		r.push { status = 200, body = Lute.encode { done = false } }
+		expect(Delivery.upload(r.config, instanceRequest(nil)).reason):toBe "pending"
+		local body = assert(r.requests[1].body)
+		expect(field(envelopeOf(body), "assetType")):toBe "Animation"
+		expect(string.find(body, "Content-Type: model/x-rbxm\r\n", 1, true) ~= nil):toBe(true)
+		expect(assert(r.records[DIGEST]).assetType):toBe "Animation"
+		expect(Delivery.key("rbxm", DIGEST, nil)):toBe(DIGEST)
+		expect(Delivery.key("rbxm", DIGEST, "Animation")):toBe(DIGEST)
+		expect(Delivery.key("rbxmx", DIGEST, "Model")):toBe(DIGEST .. "_Model")
+		expect(Delivery.key("rbxm", DIGEST, "Mesh")):toBeNil()
+		expect(Delivery.key("png", DIGEST, nil)):toBe(DIGEST)
+	end)
+
+	for _, format in { "rbxm", "rbxmx" } do
+		it("sends " .. format .. " as a Model under its own key", function()
+			local r = rig()
+			local model = instanceRequest "Model"
+			model.format = format
+			r.push(created())
+			r.push { status = 200, body = Lute.encode { done = false } }
+			expect(Delivery.upload(r.config, model).reason):toBe "pending"
+			local body = assert(r.requests[1].body)
+			expect(string.find(body, '"assetType":"Model"', 1, true) ~= nil):toBe(true)
+			expect(string.find(body, "Content-Type: model/x-rbxm\r\n", 1, true) ~= nil):toBe(true)
+			expect(r.records[DIGEST]):toBeNil()
+			expect(assert(r.records[DIGEST .. "_Model"]).assetType):toBe "Model"
+			r.push(operationDone())
+			r.push(readback "Model")
+			local settled = Delivery.upload(r.config, model)
+			expect(settled.verdict):toBe "approved"
+			expect(r.posts()):toBe(1)
+		end)
+	end
+
+	it("delivers bytes already recorded as an Animation as a Model without touching that record", function()
+		local r = rig()
+		r.push(created())
+		r.push(operationDone())
+		r.push(readback "Animation")
+		expect(Delivery.upload(r.config, instanceRequest(nil)).verdict):toBe "approved"
+		local animation = assert(r.records[DIGEST])
+		local before = Lute.encode(animation)
+		r.push(created())
+		r.push(operationDone())
+		r.push(readback "Model")
+		local model = Delivery.upload(r.config, instanceRequest "Model")
+		expect(model.verdict):toBe "approved"
+		expect(r.posts()):toBe(2)
+		expect(Lute.encode(r.records[DIGEST])):toBe(before)
+		expect(assert(r.records[DIGEST .. "_Model"]).assetType):toBe "Model"
+		r.push(readback "Animation")
+		expect(Delivery.upload(r.config, instanceRequest(nil)).verdict):toBe "approved"
+		expect(r.posts()):toBe(2)
+	end)
+
+	it("stops a Model readback that reports a different type", function()
+		local r = rig()
+		r.push(created())
+		r.push(operationDone())
+		r.push(readback "Animation")
+		local outcome = Delivery.upload(r.config, instanceRequest "Model")
+		expect(outcome.reason):toBe "identity"
+	end)
+
+	it("resolves an ambiguous Model upload through the derived key", function()
+		local r = rig()
+		r.push { throws = "connection reset" }
+		expect(Delivery.upload(r.config, instanceRequest "Model").reason):toBe "ambiguous"
+		local derived = assert(Delivery.key("rbxm", DIGEST, "Model"))
+		r.push(operationDone())
+		r.push(readback "Model")
+		local resolved = Delivery.attach(r.config, derived, { operation = "operations/aaaa-0001" })
+		expect(resolved.verdict):toBe "approved"
+		expect(r.posts()):toBe(1)
+	end)
+
+	it("refuses an unsupported asset type before any send", function()
+		local cases: { { format: string, assetType: string } } = {
+			{ format = "png", assetType = "Model" },
+			{ format = "rbxm", assetType = "Mesh" },
+			{ format = "rbxmx", assetType = "Image" },
+			{ format = "fbx", assetType = "Animation" },
+		}
+		for _, case in cases do
+			local r = rig()
+			local value = instanceRequest(case.assetType)
+			value.format = case.format
+			local outcome = Delivery.upload(r.config, value)
+			expect(outcome.verdict):toBe "stop"
+			expect(outcome.reason):toBe "invalid"
+			expect(#r.requests):toBe(0)
+		end
+	end)
+
+	it("accepts the single type of another format when it is named", function()
+		local r = rig()
+		local value = request()
+		value.assetType = "Image"
+		r.push(created())
+		r.push(operationDone())
+		r.push(approvedAsset())
+		expect(Delivery.upload(r.config, value).verdict):toBe "approved"
+		expect(r.records[DIGEST] ~= nil):toBe(true)
+	end)
+
 	it("holds malformed readback field shapes without approving delivery", function()
 		local cases: { { field: string, value: unknown } } = {
 			{ field = "creationContext", value = "context" },
