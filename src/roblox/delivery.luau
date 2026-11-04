@@ -86,6 +86,7 @@ export type UploadRequest = {
 	name: string,
 	description: string?,
 	format: string,
+	assetType: string?,
 	review: Review,
 }
 
@@ -151,17 +152,56 @@ type Extra = {
 local DEFAULT_BASE_URL = "https://apis.roblox.com/assets/v1/"
 local MAX_BYTES = 20000000
 
-local FORMATS: { [string]: { assetType: string, contentType: string } } = {
-	png = { assetType = "Image", contentType = "image/png" },
-	wav = { assetType = "Audio", contentType = "audio/wav" },
-	mp3 = { assetType = "Audio", contentType = "audio/mpeg" },
-	ogg = { assetType = "Audio", contentType = "audio/ogg" },
-	rbxm = { assetType = "Animation", contentType = "model/x-rbxm" },
-	rbxmx = { assetType = "Animation", contentType = "model/x-rbxm" },
-	fbx = { assetType = "Model", contentType = "model/fbx" },
-	gltf = { assetType = "Model", contentType = "model/gltf+json" },
-	glb = { assetType = "Model", contentType = "model/gltf-binary" },
+type Format = { assetType: string, allowed: { [string]: boolean }, contentType: string }
+
+local function single(assetType: string, contentType: string): Format
+	return { assetType = assetType, allowed = { [assetType] = true }, contentType = contentType }
+end
+
+local function instance(contentType: string): Format
+	return { assetType = "Animation", allowed = { Animation = true, Model = true }, contentType = contentType }
+end
+
+local FORMATS: { [string]: Format } = {
+	png = single("Image", "image/png"),
+	wav = single("Audio", "audio/wav"),
+	mp3 = single("Audio", "audio/mpeg"),
+	ogg = single("Audio", "audio/ogg"),
+	rbxm = instance "model/x-rbxm",
+	rbxmx = instance "model/x-rbxm",
+	fbx = single("Model", "model/fbx"),
+	gltf = single("Model", "model/gltf+json"),
+	glb = single("Model", "model/gltf-binary"),
 }
+
+local function resolveType(format: Format, requested: unknown): string?
+	if requested == nil then
+		return format.assetType
+	end
+	if type(requested) == "string" and format.allowed[requested] then
+		return requested
+	end
+	return nil
+end
+
+local function recordKey(format: Format, digest: string, assetType: string): string
+	if assetType == format.assetType then
+		return digest
+	end
+	return digest .. "_" .. assetType
+end
+
+local function storeKey(format: string, digest: string, assetType: string?): string?
+	local entry = FORMATS[format]
+	if entry == nil then
+		return nil
+	end
+	local resolved = resolveType(entry, assetType)
+	if resolved == nil then
+		return nil
+	end
+	return recordKey(entry, digest, resolved)
+end
 
 local function applyExtra(value: Result, extra: Extra)
 	value.assetId = extra.assetId
@@ -525,7 +565,8 @@ local function multipart(
 	config: Config,
 	request: UploadRequest,
 	digest: string,
-	format: { contentType: string }
+	format: Format,
+	assetType: string
 ): (string, string)
 	local json = assert(config.json)
 	local boundary = "generate" .. digest
@@ -533,7 +574,7 @@ local function multipart(
 		then { groupId = config.creator.id }
 		else { userId = config.creator.id }
 	local envelope = json.encode {
-		assetType = FORMATS[request.format].assetType,
+		assetType = assetType,
 		displayName = request.name,
 		description = request.description or "",
 		creationContext = { creator = creator, assetPrivacy = config.privacy or "restricted" },
@@ -580,6 +621,10 @@ local function upload(config: Config, request: UploadRequest): Result
 	if format == nil then
 		return stop("invalid", "supported formats are png, wav, mp3, ogg, rbxm, rbxmx, fbx, gltf and glb")
 	end
+	local assetType = resolveType(format, request.assetType)
+	if assetType == nil then
+		return stop("invalid", "the asset type is not supported for this format")
+	end
 	if type(request.name) ~= "string" or request.name == "" or #request.name > 50 then
 		return stop("invalid", "the display name must contain 1 to 50 bytes")
 	end
@@ -591,12 +636,13 @@ local function upload(config: Config, request: UploadRequest): Result
 	if unreviewed then
 		return stop("unreviewed", unreviewed)
 	end
-	local existing = config.store.read(digest)
+	local key = recordKey(format, digest, assetType)
+	local existing = config.store.read(key)
 	if existing then
 		if
 			existing.sha256 ~= digest
 			or not creatorMatches(config.creator, existing.creator)
-			or existing.assetType ~= format.assetType
+			or existing.assetType ~= assetType
 		then
 			return stop("identity", "the stored record names different bytes, creator or type")
 		end
@@ -608,7 +654,7 @@ local function upload(config: Config, request: UploadRequest): Result
 			)
 		end
 		if existing.assetId ~= nil or existing.operation ~= nil then
-			return pollSettled(config, digest, copyRecord(existing))
+			return pollSettled(config, key, copyRecord(existing))
 		end
 		if existing.attempt ~= "unsent" then
 			return stop(
@@ -620,7 +666,7 @@ local function upload(config: Config, request: UploadRequest): Result
 	end
 	local evidence: Authority? = nil
 	if config.authorize then
-		local granted, reason = config.authorize(digest)
+		local granted, reason = config.authorize(key)
 		if granted == nil then
 			return stop("not_authorized", reason or "authorization refused")
 		end
@@ -630,7 +676,7 @@ local function upload(config: Config, request: UploadRequest): Result
 		source = request.label,
 		sha256 = digest,
 		byteCount = #request.bytes,
-		assetType = format.assetType,
+		assetType = assetType,
 		displayName = request.name,
 		description = request.description or "",
 		creator = copyCreator(config.creator),
@@ -641,18 +687,18 @@ local function upload(config: Config, request: UploadRequest): Result
 		attempt = "sending",
 	}
 	if existing then
-		if not pcall(config.store.write, digest, copyRecord(record)) then
+		if not pcall(config.store.write, key, copyRecord(record)) then
 			return stop("ambiguous", "the write-ahead record could not be updated")
 		end
-	elseif not config.store.create(digest, copyRecord(record)) then
+	elseif not config.store.create(key, copyRecord(record)) then
 		return stop("concurrent", "another invocation owns these bytes")
 	end
-	local body, contentType = multipart(config, request, digest, format)
+	local body, contentType = multipart(config, request, digest, format, assetType)
 	local reply = exchange(config, "create", "POST", "assets", body, contentType)
 	local failure = reply.failure
 	if failure == "unsent" then
 		record.attempt = "unsent"
-		config.store.write(digest, copyRecord(record))
+		config.store.write(key, copyRecord(record))
 		return hold("remote_unreachable", "safe", reply.detail, { record = copyRecord(record) })
 	end
 	if failure == "unknown" then
@@ -670,12 +716,12 @@ local function upload(config: Config, request: UploadRequest): Result
 		end
 		record.operation = operation
 		record.attempt = "accepted"
-		config.store.write(digest, copyRecord(record))
-		return pollSettled(config, digest, record)
+		config.store.write(key, copyRecord(record))
+		return pollSettled(config, key, record)
 	end
 	if status == 429 then
 		record.attempt = "unsent"
-		config.store.write(digest, copyRecord(record))
+		config.store.write(key, copyRecord(record))
 		return hold("rate_limited", "safe", "HTTP 429", { record = copyRecord(record) })
 	end
 	if status >= 500 then
@@ -687,7 +733,7 @@ local function upload(config: Config, request: UploadRequest): Result
 	end
 	local refused = assert(statusFailure(reply))
 	record.attempt = if refused.reason == "refused" then "refused" else "failed"
-	config.store.write(digest, copyRecord(record))
+	config.store.write(key, copyRecord(record))
 	refused.record = copyRecord(record)
 	return refused
 end
@@ -783,7 +829,8 @@ local function queue(config: Config, items: { Item }, options: QueueOptions?): Q
 			return { verdict = "stop", reason = reason or "invalid", name = item.name, detail = detail, rows = rows }
 		end
 		local digest = if config.sha256 then config.sha256(request.bytes) else ""
-		local fresh = config.store.read(digest) == nil
+		local stored = storeKey(request.format, digest, request.assetType)
+		local fresh = stored == nil or config.store.read(stored) == nil
 		if fresh and lastPost ~= nil and opts.spacing and config.wait then
 			local remaining = opts.spacing - (now(config) - lastPost)
 			if remaining > 0 then
@@ -927,6 +974,7 @@ end
 
 return table.freeze {
 	upload = upload,
+	key = storeKey,
 	status = status,
 	attach = attach,
 	queue = queue,

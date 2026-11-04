@@ -256,7 +256,8 @@ Use `Roblox.delivery.upload` to save one reviewed file.
 `Roblox.delivery.upload(config, request)` takes these fields:
 
 - `label`, `bytes`, `name`, `description`
-- `format`: `png`, `wav`, `mp3`, `ogg`, `rbxm`, `rbxmx`, `fbx`, `gltf` or `glb`. The binary and XML instance formats request `Animation`; FBX and glTF formats request `Model`, following the [Assets API file formats](https://create.roblox.com/docs/cloud/guides/usage-assets#supported-asset-types-and-limits). The consumer supplies a complete model payload, including its required resources.
+- `format`: `png`, `wav`, `mp3`, `ogg`, `rbxm`, `rbxmx`, `fbx`, `gltf` or `glb`. The binary and XML instance formats request `Animation` unless `assetType` is `Model`; FBX and glTF formats request `Model`, following the [Assets API file formats](https://create.roblox.com/docs/cloud/guides/usage-assets#supported-asset-types-and-limits). The consumer supplies a complete model payload, including its required resources.
+- `assetType` (optional): `Animation` or `Model` for `rbxm` and `rbxmx`, where `Animation` is the default. Every other format accepts only its own type. Any other value stops as `invalid` before a send.
 - `review`: `by`, `verdict = "complies"`, `shows`, and the `sha256` of those exact bytes
 
 The function runs these steps:
@@ -269,6 +270,8 @@ The function runs these steps:
 
 The record under the SHA-256 of the bytes holds the source label, hash, size, reviewer, creator, privacy, authority evidence, operation, asset ID, version and moderation.
 A repeated call resumes from the record.
+
+A record is kept per bytes and asset type. The default type of a format keeps the bare SHA-256 as its key. Another type uses `<sha256>_<assetType>`. `Roblox.delivery.key(format, sha256, assetType)` returns the key, or `nil` for an unsupported type. Pass that key to `attach`.
 
 - `status(config, reference, assetType)` reads an operation path or an asset ID. It does not update a stored attempt.
 - `queue(config, items, options)` uploads one item at a time. It stops at the first result that is not approved and reports each `Row` through `options.log`. Each item prepares its request when the queue reaches it.
@@ -298,6 +301,7 @@ It uses `AssetService:CreateAssetAsync` through `host.create`.
 | Upload one reviewed file | `Roblox.delivery.upload(config, request)` |
 | Read an operation or an asset | `Roblox.delivery.status(config, reference, assetType)` |
 | Upload several files, stopping at the first refusal | `Roblox.delivery.queue(config, items, options)` |
+| Get the store key of an upload | `Roblox.delivery.key(format, sha256, assetType)` |
 | Record an operation or asset ID after an ambiguous upload | `Roblox.delivery.attach(config, key, reference)` |
 | Save one native object | `Roblox.delivery.native.save(config, host, request)` |
 | Record an asset ID after an ambiguous native save | `Roblox.delivery.native.attach(config, key, assetId)` |
