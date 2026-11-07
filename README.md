@@ -1,54 +1,111 @@
 # Generate
 
-Generate supplies reusable game asset production tools for Luau: image transforms and checks,
-audio measurement and process bindings, Roblox delivery, and review records bound to exact bytes.
-Consumers supply authoring tools for images, models, animation, audio, voice and structured content.
+Asset production, review and Roblox delivery tools for Luau.
 
-First, install the pinned tools from the repository root:
+Generate helps Roblox developers turn an asset request into ordered tool steps, retained
+outputs and a review tied to the exact files. It provides image transforms and checks,
+audio measurement and conversion, review records, and Roblox upload and asset inspection
+adapters. You supply the image, model, animation or audio tools, along with your quality
+criteria, permissions and destination. Generate is a library for building that workflow;
+it does not include a generation service or decide whether an asset meets your needs.
 
-```console
-rokit install
+First, run one fixture with the [quickstart](docs/quickstart.md).
+
+## What is inside
+
+| Family | Tools | Entry |
+| --- | --- | --- |
+| Planning and execution | Asset requests, ordered stages, permission and budget checks, results and rollback records | [Brief, plan and execution](docs/api.md#brief-plan-and-execution) |
+| Review and revisions | Review decisions tied to exact files, revision history, source and rights records, approved output lists | [Review and delivery](docs/api.md#review-and-delivery) |
+| Delivery targets | Destination records checked by the selected adapter | [Delivery destinations](docs/api.md#delivery-destinations) |
+| Roblox assets | File uploads, native Studio saves, permission requests, ownership and moderation checks, reference audits, binary instance reading and unit conversion | [Roblox adapter](docs/api.md#roblox-adapter) |
+| Images | Tool bindings, pixel transforms, measurements, threshold checks and review views | [Image tools](docs/api.md#image-lane) |
+| Audio | WAVE encoding and measurement, ffmpeg conversion, ffprobe metadata, loudness, waveforms and spectrograms | [Media](docs/api.md#media) |
+| External tools | Run a supplied command and record its output digest and invocation | [Process tools](docs/api.md#process-tools) |
+| Development | Asset-request diagnostics and simulated tool results for local tests | [Brief diagnostics](docs/api.md#brief-diagnostics), [fixture host](docs/api.md#fixture-host) |
+
+Each package has a public entry under `src`. Core records work without Roblox or a
+generation provider. Adapters connect those records to tools supplied by your project.
+
+## Example
+
+Describe an image and order its generation and review steps:
+
+```luau
+local Generate = require(path.to.generate.core)
+
+local brief = Generate.brief {
+    id = "sample.icon.v1",
+    kind = "image",
+    intent = { role = "A clear folder icon" },
+    review = {
+        rubric = "icon",
+        rubricFingerprint = "icon-rubric-v1",
+        views = { "normal", "32px" },
+        blindness = "required",
+        independence = "required",
+    },
+    delivery = { semanticId = "sample.icon", target = "local" },
+}
+
+local plan = Generate.plan(brief, {
+    { id = "candidate", operation = "generate" },
+    { id = "review", operation = "review", dependsOn = { "candidate" } },
+})
+assert(plan.briefId == brief.id)
 ```
 
-Then run the [first example](docs/quickstart.md#run-an-example).
-The consumer supplies the tools, host and authority. The consumer owns art direction,
-rights, credentials, destinations and final acceptance.
+This builds a plan without calling a tool or uploading anything. To run it, supply the
+tool operations and permissions to `Generate.execute`, then inspect the returned status.
+The [API reference](docs/api.md) covers results, failures and recovery.
+
+## How it fits together
+
+| Surface | Purpose |
+| --- | --- |
+| `src/core` | Asset requests, plans, execution, review, revisions, rights and delivery records. |
+| `src/image` | Image tool bindings, transforms, measurements and review views. |
+| `src/media` | WAVE encoding and measurement without external processes. |
+| `src/roblox` | Roblox delivery, permissions, asset inspection and binary instance reading. |
+| `src/lute` | Process execution and audio tool bindings for Lute. |
+| `src/consumer` | Diagnostics for authored asset requests. |
+| `src/host` | Simulated tool operations for fixtures. |
+
+Import public package entries. Keep credentials, tool choices and final approval in your
+project. [Architecture](docs/architecture.md) explains the boundaries between packages.
+
+## Install
+
+Generate is pinned by commit, not by version. Choose a commit of
+`https://github.com/voidmeld/generate.git`, record its commit and tree in your dependency
+lock, and vendor the packages you use. The [quickstart](docs/quickstart.md) covers the first
+run; [adapters](docs/adapters.md) explains how to connect tools. After a pin change, run the
+checks for the consumers you changed.
 
 ## Documentation
 
-Use this page to select a document. Each document owns one subject.
-
-| Document | Subject |
+| Task | Document |
 | --- | --- |
-| [Quickstart](docs/quickstart.md) | First example and production steps. |
-| [API](docs/api.md) | Public calls, fields and contracts. |
-| [Terms](docs/terms.md) | Technical words used in these documents. |
-| [Architecture](docs/architecture.md) | Packages and their responsibilities. |
-| [Adapters](docs/adapters.md) | Connections to tools and hosts. |
-| [Evidence](docs/evidence.md) | Checks and the limits of their results. |
-| [Lint](docs/lint.md) | Source and brief diagnostics. |
-| [Native retention](docs/native-codegen.md) | Preserve native content before cleanup. |
-| [Benchmarks](docs/benchmarks.md) | Measure execution time. |
-| [Production skill](.agents/skills/generate/SKILL.md) | Execute an assigned production stage. |
-| [Skill adapters](.agents/skills/generate/references/adapters.md) | Tool and Studio procedures. |
-| [Skill review](.agents/skills/generate/references/review.md) | Review and rights procedures. |
-| [Skill delivery](.agents/skills/generate/references/delivery.md) | Delivery procedures. |
-| [Contributor guide](AGENTS.md) | Source change rules and validation. |
-| [Provenance](PROVENANCE.md) | Source and dependency ownership. |
-| [License](LICENSE) | MIT License. |
+| Run the first fixture | [Quickstart](docs/quickstart.md) |
+| Find public calls, returns and failures | [API reference](docs/api.md) |
+| Connect tools and Roblox operations | [Adapters](docs/adapters.md) |
+| Understand package boundaries | [Architecture](docs/architecture.md) |
+| Look up record terminology | [Terms](docs/terms.md) |
+| Understand what checks establish | [Check coverage and limits](docs/evidence.md) |
+| Diagnose an asset request | [Lint](docs/lint.md) |
+| Preserve editable source and native capabilities | [Native retention](docs/native-codegen.md) |
+| Measure execution time | [Benchmarks](docs/benchmarks.md) |
+| Change this repository or run its gate | [Maintainer guide](AGENTS.md) |
+| Check source and dependency ownership | [Provenance](PROVENANCE.md) |
 
-## Validate
+## Compatibility
 
-Run the gate from the repository root:
+The supported unit is an exact commit and tree; there is no semantic-version promise.
+Public package exports, record schemas and documented failure behavior are contracts.
+Update affected consumers with a contract change. Internal helpers and fixtures are not
+public APIs. External tools and Roblox services have their own requirements.
 
-```console
-lute run tools/gate.luau --tier fast
-```
+## License
 
-For a full gate, follow the [contributor guide](AGENTS.md#validate).
-For one test file, add `--file tests/core.verify.luau` to the gate command.
-For a case name, use `--name "<text>"`.
-For a case ID, use `--only tests --case "<case id>"`.
-Use `--list` to list producers. Use `--rerun` to repeat failed checks.
-Use `--explain <id>` to explain a selection or failure.
-A narrowed run proves only the selected checks.
+Generate is [MIT licensed](LICENSE). Its own development dependencies are pinned in
+[dependencies.lock.luau](dependencies.lock.luau).
