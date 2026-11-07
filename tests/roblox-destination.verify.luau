@@ -6,7 +6,6 @@ local describe, it, expect = Test.describe, Test.it, Test.expect
 
 local Generate = require "../src/core"
 local Destination = require "../src/roblox/destination"
-local Units = require "../src/roblox/units"
 
 local function lawful(overrides: { [string]: unknown }): { [string]: unknown }
 	local draft: { [string]: unknown } = {
@@ -145,34 +144,6 @@ describe("Roblox publication destination", function()
 		expect(function()
 			Destination.create(lawful { creator = { type = "group", id = "1", token = "smuggled" } })
 		end):toThrow "unknown field"
-	end)
-end)
-
-describe("Roblox size units", function()
-	it("converts a size in metres, the default unit, to studs", function()
-		local studs = Units.studs { x = 2.8, y = 0.56, z = 0.28 }
-		expect(math.abs(studs.x - 10) < 1e-9):toEqual(true)
-		expect(math.abs(studs.y - 2) < 1e-9):toEqual(true)
-		expect(math.abs(studs.z - 1) < 1e-9):toEqual(true)
-		expect(math.abs(Units.studs({ x = 280, y = 28, z = 28, unit = "cm" }).x - 10) < 1e-9):toEqual(true)
-		expect(math.abs(Units.studs({ x = 280, y = 280, z = 280, unit = "mm" }).y - 1) < 1e-9):toEqual(true)
-	end)
-
-	it("refuses an unknown unit and a size that is not a positive finite number", function()
-		local invalid: unknown = { x = 1, y = 1, z = 1, unit = "ft" }
-		assert(type(invalid) == "table")
-		expect(function()
-			Units.studs(invalid)
-		end):toThrow "unit"
-		expect(function()
-			Units.studs { x = 0, y = 1, z = 1 }
-		end):toThrow "size x"
-		expect(function()
-			Units.studs { x = 1, y = -1, z = 1 }
-		end):toThrow "size y"
-		expect(function()
-			Units.studs { x = 1, y = 1, z = math.huge }
-		end):toThrow "size z"
 	end)
 end)
 

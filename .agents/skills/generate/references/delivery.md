@@ -1,6 +1,6 @@
 # Delivery
 
-For a reviewed file or a native object, follow [direct delivery](../../../../docs/api.md#direct-delivery).
+For a reviewed file or a native object, follow [direct delivery](../../../../docs/api.md#roblox).
 It provides write-ahead recovery, moderation readback and a stop on the first refusal.
 The consumer supplies the creator, destination, transport and authorization.
 

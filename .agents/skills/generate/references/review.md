@@ -1,6 +1,6 @@
 # Review and provenance
 
-For the decision count, independence, blindness and rights requirements, use [the review contract](../../../../docs/api.md#generatebrief).
+For the decision count, independence, blindness and rights requirements, use [the review contract](../../../../docs/api.md#generate).
 To bind that decision to the candidate and evidence, use [packets and decisions](../../../../docs/api.md#packets-and-decisions).
 Record the real actor and context.
 

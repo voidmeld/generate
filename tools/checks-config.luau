@@ -102,39 +102,12 @@ local config: {
 						return require "../src/roblox"
 					end,
 				},
-				{
-					prefix = "Media",
-					entry = "src/media/init.luau",
-					load = function(): unknown
-						return require "../src/media"
-					end,
-				},
+
 				{
 					prefix = "Image",
 					entry = "src/image/init.luau",
 					load = function(): unknown
 						return require "../src/image"
-					end,
-				},
-				{
-					prefix = "Lute",
-					entry = "src/lute/init.luau",
-					load = function(): unknown
-						return require "../src/lute"
-					end,
-				},
-				{
-					prefix = "Host",
-					entry = "src/host/init.luau",
-					load = function(): unknown
-						return require "../src/host"
-					end,
-				},
-				{
-					prefix = "Consumer",
-					entry = "src/consumer/init.luau",
-					load = function(): unknown
-						return require "../src/consumer"
 					end,
 				},
 			},
@@ -146,7 +119,7 @@ local config: {
 			requiredPaths = { ".lute/dependencies" },
 		},
 		noAny = { untracked = true },
-		specStyle = { untracked = true, exclude = { ["tests/adapters.lute.verify.luau"] = true } },
+		specStyle = { untracked = true },
 	}
 
 local function writeRequested(): boolean

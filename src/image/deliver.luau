@@ -1,7 +1,7 @@
 --!strict
 
 local Codec = require "./codec"
-local Qa = require "./qa"
+local Qa = require "./qa-metrics"
 
 local LANCZOS_WINDOW = 3
 

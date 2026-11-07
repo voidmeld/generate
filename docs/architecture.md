@@ -1,44 +1,14 @@
 # Architecture
 
-Generate supplies reusable asset production functions and records.
-Core binds review to retained candidate revisions. Hosts perform effects.
-Consumers own art direction, budgets, credentials, destinations, rights policy and final runtime acceptance.
+Generate owns deterministic asset records, image preparation and Roblox delivery. Consumers own execution, providers, authored-brief policy, credentials, rights policy and final acceptance.
 
 | Boundary | Responsibility |
 | --- | --- |
-| `src/core` | Briefs, plans, intersection of capability and authority, provenance, review, manifests, delivery destinations and execution recovery records. |
-| `src/roblox` | Roblox adapter, one module per job: reviewed file and native-object delivery, destinations, size units, asset readback, permission requests, asset audit, binary instance reading. |
-| `src/media` | Audio measurement without a process. |
-| `src/image` | Typed host bindings, one provider attempt, deterministic transforms, measurements and checks against consumer thresholds, and blind review packets. |
-| `src/lute` | Process and media tool bindings. |
-| `src/host`, `src/consumer` | Fixture hosts and authored-brief diagnostics. |
+| `src/core` | Briefs, plans, review and provenance bindings, receipts, manifests, destinations and revision records. |
+| `src/image` | Pixel codecs, measurement, deterministic resizing, metrics and blind review staging. |
+| `src/roblox` | Reviewed file/native delivery, destinations, readback, permissions, auditing and binary model reading. |
 
-Core imports no provider, filesystem, engine or scene framework. Core names no host. A host is an adapter. `tools/check-boundary.luau` enforces this rule.
-A manifest is data. The consumer can load it through its own scene system.
-Generate records outputs that can vary between runs.
-A plan does not make a provider deterministic.
-`gen-fp2` is a bookkeeping fingerprint. It is not a signature and grants no authority.
-Artifact SHA-256 digests bind bytes. They do not bind truthfulness or rights.
+Core imports no provider, filesystem, engine or scene framework. `tools/check-boundary.luau` enforces this rule.
+Canonical `gen-fp2` fingerprints bind records; SHA-256 digests bind artifact bytes. Neither establishes truth, rights or authority.
 
-## Contracts
-
-- [Execution](api.md#generateexecute) owns authority checks, stage results and compensation.
-- [Review](api.md#generatebrief) owns the single decision, independence, blindness and byte bindings.
-- [Direct delivery](api.md#direct-delivery) owns file and native-object saves with moderation readback and recovery.
-- [Native retention](native-codegen.md) owns preservation before cleanup.
-
-An accepted receipt establishes only the acceptance that the brief declares.
-The consumer still verifies its actual runtime and decides whether to promote the artifact.
-
-Test production receipts with ordinary Verify cases.
-Close over the receipt and assert through the case context.
-Use the same host binding, deadline, evidence and report APIs as other tests.
-Generate adds no test authoring format and does not wrap Verify run options.
-
-## Internal modules
-
-Image `qa-metrics` measures pixels. Image `qa` applies declared limits.
-Roblox `delivery` owns file uploads and native saves, with durable attempt records and recovery.
-Core `execution-validation` checks artifact and cost records.
-Core `execution` controls stage order, review and recovery.
-These modules do not add public package roots.
+Receipts retain execution, compensation and checkpoint data without an executor implementation. A manifest is data selected from an unchanged accepted receipt. Consumers retain originals and verify their own runtime acceptance. [The API](api.md) owns public contracts.
