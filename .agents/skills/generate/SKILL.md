@@ -5,7 +5,7 @@ description: Use this skill to execute or review a declared Generate brief for i
 
 # Generate production
 
-The [terms](../../../docs/index.md#terms) define the words of this skill, including `REFUSE` and `HOLD`.
+The [terms](../../../docs/terms.md) define the words of this skill, including `REFUSE` and `HOLD`.
 
 This skill executes or reviews a declared Generate production brief, from the validation of the brief and grant through the review packet.
 

@@ -2,7 +2,7 @@
 
 Thank you for helping improve Generate. Generate supplies reusable asset production tools for Luau.
 
-## Set up
+## Setup
 
 Install [Rokit](https://github.com/rojo-rbx/rokit), then install the pinned tools from the repository root:
 
@@ -13,8 +13,7 @@ rokit install
 ## Rules
 
 Read [AGENTS.md](AGENTS.md) before you change anything. It owns the code, documentation and integration rules.
-Every maintained Luau file starts with `--!strict` and uses no explicit `any` and no type casts.
-Core contains data and injected effects only: no providers, hosts, I/O, clocks, credentials or destinations.
+The [API reference](docs/api.md) owns public signatures, returns and failures.
 
 ## Check your change
 

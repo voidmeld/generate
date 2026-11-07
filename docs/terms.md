@@ -1,8 +1,6 @@
 # Terms
 
-Use the [README](../README.md) to select a document.
-
-## Terms
+Use the [README](../README.md) to select a task.
 
 Each document uses these terms with one meaning.
 

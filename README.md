@@ -10,19 +10,19 @@ First, install the pinned tools from the repository root:
 rokit install
 ```
 
-Then run the [first example](docs/getting-started.md#run-an-example).
+Then run the [first example](docs/quickstart.md#run-an-example).
 The consumer supplies the tools, host and authority. The consumer owns art direction,
 rights, credentials, destinations and final acceptance.
 
-## Documents
+## Documentation
 
 Use this page to select a document. Each document owns one subject.
 
 | Document | Subject |
 | --- | --- |
-| [Getting started](docs/getting-started.md) | First example and production steps. |
+| [Quickstart](docs/quickstart.md) | First example and production steps. |
 | [API](docs/api.md) | Public calls, fields and contracts. |
-| [Terms](docs/index.md#terms) | Technical words used in these documents. |
+| [Terms](docs/terms.md) | Technical words used in these documents. |
 | [Architecture](docs/architecture.md) | Packages and their responsibilities. |
 | [Adapters](docs/adapters.md) | Connections to tools and hosts. |
 | [Evidence](docs/evidence.md) | Checks and the limits of their results. |

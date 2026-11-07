@@ -70,6 +70,7 @@ for _, source in SOURCES do
 end
 
 local producers: { Gate.ProducerDraft } = {
+	check("links", { "lute", "run", "tools/check-links.luau" }, "fast"),
 	check("comments", { "lute", "run", "tools/check-code-comments.luau" }, "fast"),
 	check("leakage", { "lute", "run", "tools/check-leakage.luau" }, "fast"),
 	check("test-manifest", { "lute", "run", "tools/check-test-manifest.luau" }, "fast"),
