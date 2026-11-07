@@ -2,7 +2,6 @@
 
 local Brief = require "./core/brief"
 local Canonical = require "./core/canonical"
-local Execution = require "./core/execution"
 local Manifest = require "./core/manifest"
 local Plan = require "./core/plan"
 local Provenance = require "./core/provenance"
@@ -74,8 +73,6 @@ return {
 	briefFingerprint = Brief.fingerprint,
 	canonical = Canonical.encode,
 	fingerprint = Canonical.fingerprint,
-	execute = Execution.execute,
-	continueReview = Execution.continueReview,
 	receiptFingerprint = ReceiptModel.fingerprint,
 	manifest = Manifest.create,
 	plan = Plan.compile,

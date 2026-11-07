@@ -1,22 +1,16 @@
 # Evidence and limits
 
-Use these tests to check the contract.
-After you change a public boundary, run the consumer procedures.
-Record commits, commands and exit codes in the change report.
+Run the consumer procedures after a public boundary changes. Record commits, commands and exit codes.
 
 | Contract | Executable evidence | Limit |
 | --- | --- | --- |
-| Roblox destination validation and size units | [Destinations](../tests/roblox-destination.verify.luau) | These checks neither upload content nor prove native loading. |
-| Deterministic plan, authority, lineage, strict independent review and unchanged-receipt continuation | [Core](../tests/core.verify.luau) | Injected effects do not prove truthful rights, review independence or provider output. |
-| Verify artifact checks and external process outputs | [Adapters](../tests/adapters.lute.verify.luau) | A successful process does not prove content quality or live native behavior. |
-| One-attempt record, stop-on-refusal, ambiguous-outcome recovery, moderation readback, native save and resume | [Delivery](../tests/delivery.lute.verify.luau) | Scripted transports prove the contract. They cannot prove live moderation, ownership or that an asset loads. |
-| WAVE measurement, ffmpeg command construction and parsed tool output | [Media](../tests/media.lute.verify.luau) | A measurement is not an audition. |
-| Asset and dependency census, ownership, credential subject and binary readback | [Asset lane](../tests/asset-lane.lute.verify.luau) | Scripted replies prove validation. Metadata cannot prove remote content equality or effective native load. |
-| Bounded readback retries, exact permission IDs and malformed replies | [Cloud contracts](../tests/cloud-contracts.lute.verify.luau) | Scripted transports prove refusal and call counts; they perform no remote mutations. |
-| Typed host execution, one provider attempt, immutable references, script and output drift, blind packets and measurements | [Image lane](../tests/image-lane.lute.verify.luau) | Mock process effects and consumer thresholds do not prove provider availability or acceptance. |
-| Pixel transforms and measured image refusals | [Transforms](../tests/image-transforms.lute.verify.luau) | Small fixture codecs prove declared calculations. They do not prove all formats or perception. |
-| Authored-brief diagnostics and exact dependency resolution | [Consumer](../tests/consumer.verify.luau), [lint](../tests/lint.lute.verify.luau), [dependency](../tests/dependency-source.lute.verify.luau) | Static diagnostics support runtime checks. A pinned dependency is not live service evidence. |
+| Briefs, plans, provenance, revisions and exact review bindings | [Core](../tests/core.verify.luau) | Records cannot prove rights, actor independence or provider output. |
+| Roblox destination validation | [Destinations](../tests/roblox-destination.verify.luau) | No uploads or native loading. |
+| One attempt, refusal, recovery, readback and native resume | [Delivery](../tests/delivery.lute.verify.luau) | Scripted transports do not prove live moderation or ownership. |
+| Asset census, creator authority and binary readback | [Asset lane](../tests/asset-lane.lute.verify.luau) | Metadata does not prove effective native loading. |
+| Bounded retries, permission IDs and malformed replies | [Cloud contracts](../tests/cloud-contracts.lute.verify.luau) | No remote mutation. |
+| PNG measurement and blind review staging | [Image records](../tests/image-lane.lute.verify.luau) | Byte facts do not establish perceptual quality. |
+| Deterministic resampling and delivery facts | [Transforms](../tests/image-transforms.lute.verify.luau) | Fixture codecs do not prove all formats. |
+| Exact dependency resolution | [Dependency source](../tests/dependency-source.lute.verify.luau) | A source pin is not live-service evidence. |
 
-[The API](api.md) owns the acceptance and recovery rules. [Native retention](native-codegen.md) defines preservation and readback.
-[Benchmarks](benchmarks.md) measure framework overhead only.
-Inspect delivered content in the consumer before you claim runtime acceptance.
+[The API](api.md) owns record and recovery contracts. [Native retention](native-codegen.md) owns preservation. [Benchmarks](benchmarks.md) measure record processing only. Consumers verify their own execution, providers and runtime acceptance.

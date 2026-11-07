@@ -1,7 +1,7 @@
 # Benchmarks
 
-Measure execution time after you change the execution path.
-The Verify `Benchmark.case` in `bench/simple-path.luau` measures one stage with no artifacts.
+Measure record processing after you change canonicalization.
+The Verify benchmark in `bench/simple-path.luau` fingerprints a brief and encodes its plan.
 It warms up and keeps 15 raw samples. It sets no time budget.
 It excludes provider, file, process, engine, network, review and publication time.
 

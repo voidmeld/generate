@@ -6,7 +6,6 @@ local Delivery = require "./roblox/delivery"
 local PermissionGrant = require "./roblox/permission-grant"
 local Destination = require "./roblox/destination"
 local Rbxm = require "./roblox/rbxm"
-local Units = require "./roblox/units"
 local PermissionRequestModule = require "./roblox/permission-request"
 local Wire = require "./roblox/wire"
 
@@ -47,9 +46,6 @@ export type RbxmDocument = Rbxm.Document
 export type RbxmInstance = Rbxm.Instance
 export type RbxmReference = Rbxm.Reference
 export type RbxmTree = Rbxm.Tree
-export type SizeUnit = Units.Unit
-export type Size = Units.Size
-export type Studs = Units.Studs
 export type PermissionRequest = PermissionRequestModule.Request
 export type PermissionRequestResult = PermissionRequestModule.Result
 export type CloudRequest = Wire.AuthorizedRequest
@@ -75,5 +71,4 @@ return {
 		instancePath = Rbxm.instancePath,
 		isBinary = Rbxm.isBinary,
 	},
-	units = Units,
 }

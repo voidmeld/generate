@@ -53,4 +53,4 @@ Record omitted fields. Require an engine reimport and readback before you claim 
 A denial or an ambiguous capability stops the attempt. It grants no alternate route around the refusal.
 
 Local retention does not prove animation playback, publication, permissions, moderation or acceptance.
-For those claims, use [direct delivery](api.md#direct-delivery).
+For those claims, use [direct delivery](api.md#roblox).

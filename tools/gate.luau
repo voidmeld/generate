@@ -106,7 +106,6 @@ local producers: { Gate.ProducerDraft } = {
 		why = "the test corpus in tests, run as Verify cases",
 		deadlineSeconds = 1800,
 	},
-	check("consumer-lints", { "lute", "run", "tools/generate-check.luau", "examples" }, "fast"),
 	check("boundary", { "lute", "run", "tools/check-boundary.luau" }, "fast"),
 	check("public-surface", { "lute", "run", "tools/check-public-surface.luau" }, "fast"),
 	check("provenance", { "lute", "run", "tools/check-provenance.luau" }, "fast"),
@@ -121,7 +120,7 @@ if benchmark then
 		kind = "benchmark",
 		benchmark = require "../bench/simple-path",
 		tier = "benchmark",
-		why = "measures one execution stage; records raw samples and applies no budget",
+		why = "measures record fingerprinting and encoding; records raw samples and applies no budget",
 	}
 	table.insert(producers, producer)
 end

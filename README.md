@@ -1,31 +1,12 @@
 # Generate
 
-Asset production, review and Roblox delivery tools for Luau.
-
-Generate helps Roblox developers turn an asset request into ordered tool steps, retained
-outputs and a review tied to the exact files. It provides image transforms and checks,
-audio measurement and conversion, review records, and Roblox upload and asset inspection
-adapters. You supply the image, model, animation or audio tools, along with your quality
-criteria, permissions and destination. Generate is a library for building that workflow;
-it does not include a generation service or decide whether an asset meets your needs.
-
-First, run one fixture with the [quickstart](docs/quickstart.md).
-
-## What is inside
+Generate supplies deterministic asset records, image preparation and Roblox delivery for Luau. Consumers own execution, providers, authored-brief policy, rights, credentials and final acceptance.
 
 | Family | Tools | Entry |
 | --- | --- | --- |
-| Planning and execution | Asset requests, ordered stages, permission and budget checks, results and rollback records | [Brief, plan and execution](docs/api.md#brief-plan-and-execution) |
-| Review and revisions | Review decisions tied to exact files, revision history, source and rights records, approved output lists | [Review and delivery](docs/api.md#review-and-delivery) |
-| Delivery targets | Destination records checked by the selected adapter | [Delivery destinations](docs/api.md#delivery-destinations) |
-| Roblox assets | File uploads, native Studio saves, permission requests, ownership and moderation checks, reference audits, binary instance reading and unit conversion | [Roblox adapter](docs/api.md#roblox-adapter) |
-| Images | Tool bindings, pixel transforms, measurements, threshold checks and review views | [Image tools](docs/api.md#image-lane) |
-| Audio | WAVE encoding and measurement, ffmpeg conversion, ffprobe metadata, loudness, waveforms and spectrograms | [Media](docs/api.md#media) |
-| External tools | Run a supplied command and record its output digest and invocation | [Process tools](docs/api.md#process-tools) |
-| Development | Asset-request diagnostics and simulated tool results for local tests | [Brief diagnostics](docs/api.md#brief-diagnostics), [fixture host](docs/api.md#fixture-host) |
-
-Each package has a public entry under `src`. Core records work without Roblox or a
-generation provider. Adapters connect those records to tools supplied by your project.
+| Records | Briefs, plans, reviews, provenance, receipts, manifests and revisions | [Core](docs/api.md#generate) |
+| Images | Codecs, measurements, deterministic delivery, metrics and review staging | [Image](docs/api.md#image) |
+| Roblox | Reviewed file/native delivery, destinations, readback, permissions, auditing and binary model reading | [Roblox](docs/api.md#roblox) |
 
 ## Example
 
@@ -55,24 +36,8 @@ local plan = Generate.plan(brief, {
 assert(plan.briefId == brief.id)
 ```
 
-This builds a plan without calling a tool or uploading anything. To run it, supply the
-tool operations and permissions to `Generate.execute`, then inspect the returned status.
-The [API reference](docs/api.md) covers results, failures and recovery.
-
-## How it fits together
-
-| Surface | Purpose |
-| --- | --- |
-| `src/core` | Asset requests, plans, execution, review, revisions, rights and delivery records. |
-| `src/image` | Image tool bindings, transforms, measurements and review views. |
-| `src/media` | WAVE encoding and measurement without external processes. |
-| `src/roblox` | Roblox delivery, permissions, asset inspection and binary instance reading. |
-| `src/lute` | Process execution and audio tool bindings for Lute. |
-| `src/consumer` | Diagnostics for authored asset requests. |
-| `src/host` | Simulated tool operations for fixtures. |
-
-Import public package entries. Keep credentials, tool choices and final approval in your
-project. [Architecture](docs/architecture.md) explains the boundaries between packages.
+The plan binds ordered stages to the brief. The consumer supplies execution and authority.
+The [API reference](docs/api.md) covers record construction and delivery.
 
 ## Install
 
@@ -94,7 +59,7 @@ checks for the consumers you changed.
 | Understand what checks establish | [Check coverage and limits](docs/evidence.md) |
 | Diagnose an asset request | [Lint](docs/lint.md) |
 | Preserve editable source and native capabilities | [Native retention](docs/native-codegen.md) |
-| Measure execution time | [Benchmarks](docs/benchmarks.md) |
+| Measure record processing time | [Benchmarks](docs/benchmarks.md) |
 | Change this repository or run its gate | [Maintainer guide](AGENTS.md) |
 | Check source and dependency ownership | [Provenance](PROVENANCE.md) |
 

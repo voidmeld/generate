@@ -27,8 +27,7 @@ This file owns the contribution rules. Each fact has one owning document.
 
 - Change the owning contract together with the implementation.
 - Test public consumers and meaningful refusal and recovery paths. Report the [evidence limits](docs/evidence.md).
-- For a changed brief, run `lute run tools/generate-check.luau <path.generate.luau>`.
-- For execution hot-path changes, follow [benchmarks](docs/benchmarks.md).
+- For record hot-path changes, follow [benchmarks](docs/benchmarks.md).
 - During edits, use `lute run tools/gate.luau --file tests/core.verify.luau` or `--tier fast`. The gate owns all selectors.
 - After adding or removing a specification, run `lute run tools/check-test-manifest.luau --write`.
 - Commit the candidate. Run `lute run tools/gate.luau` on the clean HEAD, including its fresh-clone check.

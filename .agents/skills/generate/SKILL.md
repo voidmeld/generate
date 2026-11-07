@@ -12,8 +12,8 @@ This skill executes or reviews a declared Generate production brief, from the va
 1. Read the `*.generate.luau` brief and its job or plan envelope. If the brief, capability, destination or authority is missing, stop with `REFUSE`.
 2. Use only the declared adapter and route. Preserve the inputs. Return artifacts with content digests, invocation facts, rights facts and transformation history.
 3. Measure prepared spatial candidates in world-space bounds. Run the declared technical checks and Verify checks. Submit the review packet for the exact candidate.
-4. Run `lute run tools/generate-check.luau <path.generate.luau>` and the assigned technical checks. Run the gate of the consumer once on the final bytes. Do not repeat it for each asset stage. Record HEAD, commands, exit codes, artifact digests and the receipt path.
-5. A bound review packet completes preparation. For a review assignment, collect the decision under the [review contract](references/review.md) of the brief. Use `Generate.continueReview` for the unchanged candidate. A pending review is not acceptance. Report its missing decision. Do not repeat production.
+4. Run the consumer's brief validation and assigned technical checks. Run the gate of the consumer once on the final bytes. Do not repeat it for each asset stage. Record HEAD, commands, exit codes, artifact digests and the receipt path.
+5. A bound review packet completes preparation. For a review assignment, collect the decision under the [review contract](references/review.md) of the brief. Resolve the packet through `Generate.reviewDecision` and `Generate.resolveReview` under consumer execution policy. A pending review is not acceptance. Report its missing decision. Do not repeat production.
 6. Enter delivery only if all of these conditions hold:
    - The assigned scope includes delivery.
    - The exact candidate has an accepted receipt for this brief workflow.
