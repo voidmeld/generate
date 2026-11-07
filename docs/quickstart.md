@@ -1,4 +1,4 @@
-# Getting started
+# Quickstart
 
 Start with a fixture before you connect a provider.
 Pin Generate to one exact commit of `https://github.com/voidmeld/generate.git`.
@@ -20,6 +20,31 @@ The [quickstart](../examples/quickstart.generate.luau) prints a plan ID and fing
 It runs no stage. The [modular wall](../examples/modular-wall.generate.luau) also shows planning.
 The [accepted manifest](../examples/accepted-manifest.generate.luau) uses fixture effects.
 It collects a review decision and selects delivery. It creates no real media.
+
+## Inspect a result
+
+The [API setup](api.md#shared-setup) supplies `Generate`, `Media` and `Consumer` in these fragments.
+Use a typed brief before compiling a plan:
+
+```luau
+local plan = Generate.plan(brief, {
+    { id = "candidate", operation = "generate" },
+    { id = "review", operation = "review", dependsOn = { "candidate" } },
+})
+assert(plan.briefId == brief.id)
+```
+
+Check failures before consuming measurements or continuing a stage:
+
+```luau
+local outcome = Media.wav.measure("invalid bytes")
+assert(not outcome.ok)
+local findings = Consumer.scanSource("fixture.generate.luau", "return {}")
+assert(#findings > 0)
+```
+
+Run the success and refusal cases with `lute run tools/gate.luau --file tests/core.verify.luau`.
+Use [the API](api.md) for return fields and recovery rules.
 
 ## Connect a production job
 

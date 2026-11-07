@@ -1,5 +1,7 @@
 # API reference
 
+This page owns public signatures, return values and failure behavior.
+The public-surface check requires an entry here for each public export.
 Generate turns a brief into a plan, a retained candidate, a review decision and a receipt.
 Core owns those records. The consumer supplies art direction, host operations and authority.
 
@@ -10,25 +12,73 @@ Core owns those records. The consumer supplies art direction, host operations an
 | Declare the intended destination of a brief | [Delivery destinations](#delivery-destinations) |
 | Use Roblox: save, publish, grant, read back or audit assets | [Roblox adapter](#roblox-adapter) |
 | Measure, convert or render audio for review | [Media](#media) |
-| Bind a content compiler, a process tool or a reviewer | [Content, process and reviewer adapters](#content-process-and-reviewer-adapters) |
+| Bind a content compiler, a process tool or a reviewer | [Content, process and reviewer adapters](#process-tools) |
 | Produce and review an image | [Image lane](#image-lane) |
 | Check an authored brief | [Brief diagnostics](#brief-diagnostics) |
 
-The examples use public package roots. Replace the path with your package location:
+## Shared setup
+
+The examples are fragments. Complete examples and tests are linked in each area.
+Calls use dots. The examples use public package roots. Replace the path with your package location:
 
 ```luau
 local Generate = require(path.to.generate.core)
+local Roblox = require(path.to.generate.roblox)
+local Image = require(path.to.generate.image)
+local Media = require(path.to.generate.media)
+local Lute = require(path.to.generate.lute)
+local Consumer = require(path.to.generate.consumer)
+local Host = require(path.to.generate.host)
 ```
 
-The exported Luau types define the record fields. This page explains their contracts.
+Type names in a signature use the linked module's aliases. Public root aliases are listed with each area.
+The signature tables and prose below form one contract. Source links locate type declarations for implementation work.
+A missing return annotation means the result is inferred; the area's prose describes its shape.
 This page lists every public function. Use the [architecture](architecture.md) for package responsibilities.
-Use [getting started](getting-started.md) for the procedure.
+Use [the quickstart](quickstart.md) for the procedure.
 Modules below package roots are internal. Their helper exports are not public contracts.
-The [terms](index.md#terms) define the words that this page uses.
+The [terms](terms.md) define the words that this page uses.
 
 ---
 
 ## Brief, plan and execution
+
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Generate.brief(draft: BriefDraft): Brief` | [Types](../src/core/brief.luau) |
+| `Generate.briefFingerprint(brief: Brief): string` | [Types](../src/core/brief.luau) |
+| `Generate.canonical(value: unknown): string` | [Types](../src/core/canonical.luau) |
+| `Generate.continueReview(brief: Brief, plan: Plan, receipt: Receipt, drafts: { ReviewDecisionDraft }): Receipt` | [Types](../src/core/execution.luau) |
+| `Generate.derivation(draft: DerivationDraft): Derivation` | [Types](../src/core/provenance.luau) |
+| `Generate.execute(brief: Brief, plan: Plan, host: Host, authority: Authority): Receipt` | [Types](../src/core/execution.luau) |
+| `Generate.fingerprint(value: unknown): string` | [Types](../src/core/canonical.luau) |
+| `Generate.manifest(receipt: Receipt, artifactIds: { string }): DeliveryManifest` | [Types](../src/core/manifest.luau) |
+| `Generate.plan(brief: AssetBrief, drafts: { StageDraft }): Plan` | [Types](../src/core/plan.luau) |
+| `Generate.provenanceFaults( value: Derivation?, contract: ProvenanceContract, byArtifactId: { [string]: Derivation }, artifactId: string ): { string }` | [Types](../src/core/provenance.luau) |
+| `Generate.receiptFingerprint(receipt: Receipt): string` | [Types](../src/core/receipt.luau) |
+| `Generate.resolveReview( target: ReviewPacket, contract: ReviewContract, decisions: { ReviewDecision }, staleness: ReviewStaleness? ): ResolvedReview` | [Types](../src/core/review.luau) |
+| `Generate.reviewBinds(review: ResolvedReview, artifactId: string, digest: string): boolean` | [Types](../src/core/review.luau) |
+| `Generate.reviewDecision(draft: ReviewDecisionDraft): ReviewDecision` | [Types](../src/core/review.luau) |
+| `Generate.reviewPacket(draft: ReviewPacketDraft, binding: Types.PacketBinding): ReviewPacket` | [Types](../src/core/review.luau) |
+| `Generate.revisionLedger(candidateId: string, drafts: { RevisionEntryDraft }): RevisionLedger` | [Types](../src/core/revision.luau) |
+| `Generate.rights(draft: RightsFactsDraft?): RightsFacts` | [Types](../src/core/provenance.luau) |
+| `Generate.rollCandidate(current: RevisionLedger, draft: RollDraft): CandidateRevisionDraft` | [Types](../src/core/revision.luau) |
+
+Public types: `Generate.ArtifactRef`, `Generate.CandidateDisposition`, `Generate.CandidateRevision`, `Generate.Certainty`, `Generate.Verdict`, `Generate.RightsFactName`, `Generate.ReviewRequirement`, `Generate.PacketBinding`, `Generate.Derivation`, `Generate.DerivationDraft`, `Generate.EvidenceRef`, `Generate.ExcludedDecision`, `Generate.ReviewDisposition`, `Generate.ParentRef`, `Generate.ProvenanceContract`, `Generate.ResolvedReview`, `Generate.ReceiptStatus`, `Generate.ReviewContract`, `Generate.Metadata`, `Generate.DerivationOrigin`, `Generate.ReviewDecision`, `Generate.ReviewDecisionDraft`, `Generate.ReviewPacket`, `Generate.ReviewPacketDraft`, `Generate.RightsFact`, `Generate.RightsFacts`, `Generate.RubricIdentity`, `Generate.RevisionEntry`, `Generate.RevisionEntryDraft`, `Generate.RevisionLedger`, `Generate.RevisionOutcome`, `Generate.RevisionRollDraft`, `Generate.CandidateRevisionDraft`, `Generate.Artifact`, `Generate.AssetKind`, `Generate.Authority`, `Generate.Brief`, `Generate.BriefDraft`, `Generate.Host`, `Generate.Invocation`, `Generate.Destination`, `Generate.DeliveryContract`, `Generate.PublicationAttemptEconomics`, `Generate.DeliveryEntry`, `Generate.DeliveryManifest`, `Generate.Plan`, `Generate.Receipt`, `Generate.ProviderCallEconomics`, `Generate.ReviewerEconomics`, `Generate.StageEconomics`, `Generate.RunContext`, `Generate.RollbackOutcome`, `Generate.Stage`, `Generate.StageDraft`, `Generate.StageOutcome`, `Generate.StageRecord`.
+### Returns and failures
+
+Core constructors return normalized contract records. The plan copies parameter maps shallowly.
+Invalid trusted drafts raise with a field-specific message.
+They reject duplicate identities, malformed bindings, non-finite values, cycles and secret-shaped metadata.
+`briefFingerprint`, `receiptFingerprint` and `fingerprint` return deterministic strings; `canonical` returns canonical text.
+`execute` returns a receipt whose `status` must be inspected. A produced receipt is not an acceptance or publication grant.
+Execution records rejected and faulted stages and the compensation outcomes of completed mutations.
+`continueReview` returns a new receipt. Binding drift and ineligible input receipts raise before continuation.
+
+Run the [core contract](../tests/core.verify.luau) and [consumer checks](../tests/consumer.verify.luau).
+
 
 A brief declares an asset. A plan orders its stages. Execution runs the stages under authority.
 
@@ -147,7 +197,7 @@ Revisions keep consecutive candidate revisions. Provenance records lineage and r
 | Draft the next candidate revision from a ledger | `Generate.rollCandidate(ledger, draft)` |
 | Normalize and validate where a candidate came from | `Generate.derivation(draft)` |
 | Normalize the rights facts of a candidate | `Generate.rights(draft)` |
-| List the lineage and rights faults that block delivery | `Generate.provenanceFaults(derivation, contract, byArtifactId)` |
+| List the lineage and rights faults that block delivery | `Generate.provenanceFaults(derivation, contract, byArtifactId, artifactId)` |
 
 An open head cannot roll. To replace an approved head, declare that replacement.
 Derivations and rights do not invent rights facts.
@@ -179,6 +229,49 @@ Credentials are never brief values. A descriptor can carry only the name of a cr
 The destination is a record. Generate does not perform the publication.
 
 ## Roblox adapter
+
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Roblox.assetAudit.referenceViolations(input: Input): { string }` | [Types](../src/roblox/asset-audit.luau) |
+| `Roblox.assetReadback.census(options: Options, rootAssetId: string, dependencyAssetIds: { string }): Census` | [Types](../src/roblox/asset-readback.luau) |
+| `Roblox.assetReadback.readback(options: Options, assetId: string): Record` | [Types](../src/roblox/asset-readback.luau) |
+| `Roblox.delivery.attach(config: Config, key: string, reference: { operation: string?, assetId: string? }): Result` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.key(format: string, digest: string, assetType: string?): string?` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.native.attach(config: Config, key: string, assetId: string): Result` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.native.attributeStore(instance: AttributeInstance, http: AttributeJson): Store` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.native.save(config: Config, host: NativeHost, request: NativeRequest): Result` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.queue(config: Config, items: { Item }, options: QueueOptions?): QueueResult` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.status(config: Config, reference: string, expectedType: string?): Result` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.delivery.upload(config: Config, request: UploadRequest): Result` | [Types](../src/roblox/delivery.luau) |
+| `Roblox.destination(draft: unknown): Generate.Destination` | [Types](../src/roblox/destination.luau) |
+| `Roblox.permissionGrant.attempt(send: SendAuthorized, decode: Decode, prepared: Request): Result` | [Types](../src/roblox/permission-request.luau) |
+| `Roblox.permissionGrant.chunks(assetIds: { string }, size: number): { { string } }` | [Types](../src/roblox/permission-request.luau) |
+| `Roblox.permissionGrant.prepare(encode: Encode, universeId: number, assetIds: { string }): Request` | [Types](../src/roblox/permission-request.luau) |
+| `Roblox.permissionGrant.subjectAuthority( options: AuthorityOptions, credentialValue: unknown, universeId: string, groupId: string ): (AuthorityReceipt?, string)` | [Types](../src/roblox/permission-grant.luau) |
+| `Roblox.rbxm.instancePath(tree: Tree, referent: number): string` | [Types](../src/roblox/rbxm.luau) |
+| `Roblox.rbxm.instances(bytes: string): Tree` | [Types](../src/roblox/rbxm.luau) |
+| `Roblox.rbxm.isBinary(bytes: string): boolean` | [Types](../src/roblox/rbxm.luau) |
+| `Roblox.rbxm.read(bytes: string): Document` | [Types](../src/roblox/rbxm.luau) |
+| `Roblox.readDestination(value: Generate.Destination): DestinationFields` | [Types](../src/roblox/destination.luau) |
+| `Roblox.units.studs(size: unknown): Studs` | [Types](../src/roblox/units.luau) |
+
+Public types: `Roblox.AssetAuditFiles`, `Roblox.AssetAuditConfig`, `Roblox.AssetAuditInput`, `Roblox.AssetAuditReference`, `Roblox.AssetAuditModel`, `Roblox.AssetReadbackOptions`, `Roblox.AssetReadbackOwner`, `Roblox.AssetRecord`, `Roblox.AssetCensus`, `Roblox.DeliveryAuthority`, `Roblox.DeliveryAttributeInstance`, `Roblox.DeliveryAttributeJson`, `Roblox.DeliveryConfig`, `Roblox.DeliveryResult`, `Roblox.DeliveryRecord`, `Roblox.DeliveryStore`, `Roblox.DeliveryReview`, `Roblox.DeliveryCreator`, `Roblox.DeliveryRequest`, `Roblox.DeliveryReply`, `Roblox.DeliveryUpload`, `Roblox.DeliveryItem`, `Roblox.DeliveryRow`, `Roblox.DeliveryQueueResult`, `Roblox.DeliveryNativeHost`, `Roblox.DeliveryNativeRequest`, `Roblox.PermissionAuthorityOptions`, `Roblox.PermissionCredential`, `Roblox.PermissionAssignedRole`, `Roblox.PermissionChunkOutcome`, `Roblox.PermissionAuthorityReceipt`, `Roblox.PermissionPatch`, `Roblox.RbxmClass`, `Roblox.RbxmDocument`, `Roblox.RbxmInstance`, `Roblox.RbxmReference`, `Roblox.RbxmTree`, `Roblox.SizeUnit`, `Roblox.Size`, `Roblox.Studs`, `Roblox.PermissionRequest`, `Roblox.PermissionRequestResult`, `Roblox.CloudRequest`, `Roblox.CloudResponse`, `Roblox.CloudSend`, `Roblox.Destination`, `Roblox.DestinationDraft`.
+### Returns and failures
+
+Destination constructors and units raise for invalid descriptors or dimensions.
+Permission operations return their declared authority and chunk outcomes. Inspect every refusal before another mutation.
+Readback returns an `AssetRecord`, including unknown fields and diagnostics for observations it cannot establish.
+`census` returns the root and named dependency observations. It does not discover an exhaustive dependency graph.
+`referenceViolations` returns a list of strings. An empty list proves only the declared manifest checks.
+Binary readers return parsed records and diagnostics; inspect `ok` before using their class or instance lists.
+`isBinary` returns a boolean. `instancePath` returns a dot-separated path, or an empty string for an unknown referent.
+Direct delivery uses the verdict and recovery contract below; it does not raise approval from an uncertain response.
+
+See [delivery](../tests/delivery.lute.verify.luau), [cloud contracts](../tests/cloud-contracts.lute.verify.luau)
+and [destination cases](../tests/roblox-destination.verify.luau).
+
 
 The Roblox adapter binds Generate to Roblox: it saves, publishes, grants, reads back and audits assets.
 It validates Roblox facts and records them. The consumer supplies every transport, credential and file operation.
@@ -372,6 +465,36 @@ It checks receipt fields `lineage_path`, `reviewer_verdict_receipt` and `image_r
 
 ## Media
 
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Lute.media.convert(options: Convert, run: Run?): { ok: true } \| Failure` | [Types](../src/lute/media.luau) |
+| `Lute.media.convertCommand(options: Convert): { string }` | [Types](../src/lute/media.luau) |
+| `Lute.media.loudness(path: string, run: Run?): { ok: true, loudness: Loudness } \| Failure` | [Types](../src/lute/media.luau) |
+| `Lute.media.probe(path: string, run: Run?): { ok: true, probe: Probe } \| Failure` | [Types](../src/lute/media.luau) |
+| `Lute.media.review( input: string, output: string, size: { width: number, waveHeight: number, spectrumHeight: number }?, run: Run? ): { ok: true } \| Failure` | [Types](../src/lute/media.luau) |
+| `Lute.media.reviewCommand( input: string, output: string, width: number, waveHeight: number, spectrumHeight: number ): { string }` | [Types](../src/lute/media.luau) |
+| `Media.wav.encode(sampleRate: number, channels: number, samples: { number }): string` | [Types](../src/media/wav.luau) |
+| `Media.wav.measure(bytes: string): Outcome` | [Types](../src/media/wav.luau) |
+
+Public types: `Media.WavMeasurement`, `Media.WavOutcome`.
+### Returns and failures
+
+`Media.wav.measure(bytes)` returns `{ ok = true, measurement }` or `{ ok = false, diagnostic }`.
+`Media.wav.encode(sampleRate, channels, samples)` returns WAVE bytes for a deterministic fixture.
+`Lute.media.probe` and `loudness` return `ok` with `probe` or `loudness`; malformed output returns a diagnostic.
+`convert` and `review` return `{ ok = true }` or a diagnostic. Command builders return argument arrays without effects.
+Injected runners must return real process results. Runner exceptions are not converted into media acceptance.
+
+```luau
+local outcome = Media.wav.measure("invalid bytes")
+assert(not outcome.ok)
+```
+
+Run [the media cases](../tests/media.lute.verify.luau) for valid audio and malformed output.
+
+
 Media measures, converts and renders audio for review.
 
 WAVE measurement supports 16-, 24- and 32-bit PCM and 32-bit float samples. It refuses incomplete
@@ -387,7 +510,7 @@ a codec name, a positive whole sample rate and a positive whole channel count.
 | Build the ffmpeg arguments without running them | `Lute.media.convertCommand` |
 | Probe a file with ffprobe | `Lute.media.probe` |
 | Measure integrated loudness, range and true peak | `Lute.media.loudness` |
-| Write a waveform PNG and a spectrogram PNG for a human reviewer | `Lute.media.review` |
+| Write one PNG containing a waveform and a spectrogram for review | `Lute.media.review` |
 | Build the review commands without running them | `Lute.media.reviewCommand` |
 
 - Process calls take an optional runner for recorded output.
@@ -400,9 +523,79 @@ The consumer sets thresholds, recipes and acceptance criteria. A measurement is 
 
 ## Process tools
 
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Lute.process.run(options: Options): StageOutcome` | [Types](../src/lute/process.luau) |
+
+Public types: `Lute.MediaRun`, `Lute.MediaResult`, `Lute.MediaProbe`, `Lute.MediaLoudness`, `Lute.MediaConvert`, `Lute.MediaFailure`.
+### Returns and failures
+
+`Lute.process.run(options)` returns a `Generate.StageOutcome`.
+An empty command or output path returns `rejected`. A nonzero exit or missing output returns `faulted`.
+A returned outcome binds the output digest and invocation. It does not approve the content.
+Read and process exceptions can propagate. The consumer owns paths and overwrite policy.
+
+See [adapter cases](../tests/adapters.lute.verify.luau).
+
+
 `Lute.process.run` runs a consumer-declared tool and binds its output bytes, tool identity and invocation to a stage outcome. The consumer supplies the command, paths and acceptance. A successful process is not proof of content quality.
 
 ## Image lane
+
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Image.codec.copy(image: Image): Image` | [Types](../src/image/codec.luau) |
+| `Image.codec.encode(codec: Codec, image: Image): string` | [Types](../src/image/codec.luau) |
+| `Image.codec.fromHueSaturation(hue: number, saturation: number, lightness: number): (number, number, number)` | [Types](../src/image/codec.luau) |
+| `Image.codec.hueSaturation(r: number, g: number, b: number): (number, number, number)` | [Types](../src/image/codec.luau) |
+| `Image.codec.luma(r: number, g: number, b: number): number` | [Types](../src/image/codec.luau) |
+| `Image.codec.rgba(image: Image): Image` | [Types](../src/image/codec.luau) |
+| `Image.codec.rounded(value: number): number` | [Types](../src/image/codec.luau) |
+| `Image.codec.setLuma(pixels: buffer, base: number, wanted: number)` | [Types](../src/image/codec.luau) |
+| `Image.deliver.run(config: Config, bytes: string, declaredWidth: number, declaredHeight: number): Result` | [Types](../src/image/deliver.luau) |
+| `Image.host.create(options: Options): Generate.Host` | [Types](../src/image/host.luau) |
+| `Image.matte.apply(image: Codec.Image, parameters: Parameters): Codec.Image` | [Types](../src/image/matte.luau) |
+| `Image.matte.run(codec: Codec.Codec, bytes: string, parameters: Parameters): Result` | [Types](../src/image/matte.luau) |
+| `Image.measure.artifact( config: Config, id: string, locator: string, measurement: Measurement, semanticId: string? ): Generate.Artifact` | [Types](../src/image/measure.luau) |
+| `Image.measure.measure(config: Config, bytes: string): Outcome` | [Types](../src/image/measure.luau) |
+| `Image.measure.pngDimensions(bytes: string): (number?, number?, string)` | [Types](../src/image/measure.luau) |
+| `Image.measure.runStage(config: Config, deps: Deps, evidence: { Evidence }): Generate.StageOutcome` | [Types](../src/image/measure.luau) |
+| `Image.postprocess.runStage( config: Config, deps: Deps, transform: Transform, artifacts: { Generate.Artifact } ): Generate.StageOutcome` | [Types](../src/image/postprocess.luau) |
+| `Image.provider.runStage(config: Config, deps: Deps, request: Request, attempt: number): Generate.StageOutcome` | [Types](../src/image/provider.luau) |
+| `Image.qa.assess(config: Config, bytes: string, declaration: Declaration, path: string): Assessment` | [Types](../src/image/qa.luau) |
+| `Image.qa.gate(config: Config, deps: Deps, declarations: { Declaration }, located: { [string]: string }): Gate` | [Types](../src/image/qa.luau) |
+| `Image.register.facts(image: Codec.Image): Facts` | [Types](../src/image/register.luau) |
+| `Image.register.run(config: Config, bytes: string, target: Target): Result` | [Types](../src/image/register.luau) |
+| `Image.request.encode(config: Config, document: unknown): string` | [Types](../src/image/request.luau) |
+| `Image.review.runStage(config: Config, request: Request, artifacts: { Generate.Artifact }): Generate.StageOutcome` | [Types](../src/image/review.luau) |
+| `Image.review.stage(config: Config, request: Request, artifacts: { Generate.Artifact }): Outcome` | [Types](../src/image/review.luau) |
+
+Public types: `Image.Codec`, `Image.Digest`, `Image.Decoded`, `Image.Image`, `Image.Rgba`, `Image.DeliverConfig`, `Image.DeliverFacts`, `Image.DeliverResult`, `Image.DeliverSuccess`, `Image.HostBinding`, `Image.HostMatteBinding`, `Image.HostRegisterBinding`, `Image.HostDeliverBinding`, `Image.HostDeps`, `Image.HostOptions`, `Image.HostTool`, `Image.HostTools`, `Image.MatteParameters`, `Image.MatteResult`, `Image.MatteSuccess`, `Image.MeasureBounds`, `Image.MeasureConfig`, `Image.MeasureOutcome`, `Image.MeasureEvidence`, `Image.Measurement`, `Image.PostprocessConfig`, `Image.PostprocessKind`, `Image.PostprocessTransform`, `Image.ProviderConfig`, `Image.ProviderDeps`, `Image.ProviderPaths`, `Image.ProviderRequest`, `Image.ProviderRunResult`, `Image.QaAssessment`, `Image.QaPair`, `Image.QaRefusal`, `Image.QaConfig`, `Image.QaDeclaration`, `Image.QaDeps`, `Image.QaGate`, `Image.QaThresholds`, `Image.QaHueBand`, `Image.RegisterConfig`, `Image.RegisterResult`, `Image.RegisterSuccess`, `Image.RegisterDeclarationTarget`, `Image.RegisterFacts`, `Image.RegisterTarget`, `Image.RegisterValues`, `Image.RequestConfig`, `Image.ReviewConfig`, `Image.ReviewOutcome`, `Image.ReviewRequest`.
+### Returns and failures
+
+`Image.host.create` returns a `Generate.Host`. Routing and stage outcomes retain the declared stage status.
+`pngDimensions` returns width, height and an empty diagnostic, or two nils and a diagnostic.
+`measure` returns `ok` with a measurement or a diagnostic. `artifact` returns a bound artifact record.
+Transform `run` calls return `ok` with transformed bytes and facts, or a diagnostic.
+`matte.apply` returns an image directly and requires valid pixels and parameters.
+QA returns measured assessments or a gate result with explicit refusals. Missing required thresholds raise.
+`request.encode` returns sorted text. It grants no execution authority.
+Pixel helpers return copies or scalar measurements; `setLuma` changes the supplied pixel buffer.
+`review.stage` returns a review outcome; `runStage` maps it to a stage outcome.
+Provider, postprocess and measurement stage calls return `Generate.StageOutcome` with explicit rejection or fault details.
+
+```luau
+local width, height, diagnostic = Image.measure.pngDimensions("invalid bytes")
+assert(width == nil and height == nil and diagnostic ~= "")
+```
+
+Run the [image example](../examples/image-tools.luau), [lane cases](../tests/image-lane.lute.verify.luau)
+and [transform cases](../tests/image-transforms.lute.verify.luau).
+
 
 The image lane binds one provider attempt, deterministic transforms, measured checks and exact review views.
 The consumer supplies every threshold, visual target and transform parameter. Generate supplies the measurements and the generic checks.
@@ -554,10 +747,44 @@ Review identity strings alone do not prove that an independent human or agent re
 
 ## Brief diagnostics
 
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Consumer.scanSource(path: string, source: string, rulesets: { Consumer.Ruleset }?) -> { Consumer.Finding }` | [Types](../src/consumer/init.luau) |
+
+
+Public types: `Consumer.Finding`, `Consumer.Ruleset`.
+The scan returns an empty list when no textual rule matches. It does not parse or execute the brief.
+An unknown ruleset raises. Ruleset `roblox` adds native-specific findings.
+
+```luau
+local findings = Consumer.scanSource("fixture.generate.luau", "return {}")
+assert(#findings > 0)
+```
+
+See [the diagnostic cases](../tests/lint.lute.verify.luau).
+
+
 `Consumer.scanSource(path, source, rulesets?)` scans the text of an authored brief and returns findings. Each finding has a `code`, a `path`, a `message` and a `fix`.
 The default ruleset names no host. `Consumer.RULESETS` lists the optional rulesets. [Lint](lint.md) owns the codes.
 
 ## Fixture host
+
+### Signatures
+
+| Call and return | Type declarations |
+| --- | --- |
+| `Host.fake.create(options: Options?): Host` | [Types](../src/host/fake.luau) |
+The fixture records run and compensation calls. Unspecified stage outcomes use its default fixture response.
+Use it for deterministic contracts. It establishes no provider, native output or rights evidence.
+
+```luau
+local host = Host.fake.create()
+```
+
+The [accepted-manifest example](../examples/accepted-manifest.generate.luau) exercises a complete fixture pipeline.
+
 
 `Host.fake.create(options)` returns a `Generate.Host` for fixtures. The consumer supplies stage outcomes, compensation faults, capabilities and environment.
 It does no I/O.
