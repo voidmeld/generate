@@ -70,5 +70,5 @@ The [architecture](architecture.md) lists the public packages.
 Keep the record of a held or ambiguous delivery.
 Use the status or attach calls in [direct delivery](api.md#direct-delivery).
 Do not generate or upload again because review or readback is missing.
-Use the [README](../README.md#validate) for check commands.
+Use the [maintainer guide](../AGENTS.md#validate) for check commands.
 Read the [evidence limits](evidence.md) before you make a production claim.
