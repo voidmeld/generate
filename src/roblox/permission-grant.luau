@@ -18,6 +18,7 @@ export type AuthorityOptions = {
 	baseUrl: string?,
 	maxMembershipPages: number?,
 	maxRolePages: number?,
+	allowedVisibilities: { string }?,
 }
 
 export type Credential = {
@@ -381,7 +382,8 @@ local function subjectAuthority(
 		universe.path ~= "universes/" .. universeId
 		or universe.group ~= "groups/" .. groupId
 		or universe.user ~= nil
-		or universe.visibility ~= "PRIVATE"
+		or type(universe.visibility) ~= "string"
+		or not table.find(options.allowedVisibilities or { "PRIVATE" }, universe.visibility)
 	then
 		return nil, "universe ownership is not the required group"
 	end
