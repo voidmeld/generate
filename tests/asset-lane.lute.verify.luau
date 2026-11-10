@@ -253,6 +253,35 @@ describe("Roblox.permissionGrant subject authority", function()
 		expect(reason):toBe "universe ownership is not the required group"
 	end)
 
+	it("refuses a public universe unless the caller allows public visibility", function()
+		local routes = {
+			["/universes/10"] = { path = "universes/10", group = "groups/4242", visibility = "PUBLIC" },
+			["/memberships"] = {
+				groupMemberships = {
+					{
+						path = "groups/4242/memberships/m1",
+						user = "users/5",
+						roles = { "groups/4242/roles/r1" },
+					},
+				},
+			},
+			["/roles"] = {
+				groupRoles = {
+					{ path = "groups/4242/roles/r1", id = "r1", displayName = "Builder", rank = 10 },
+				},
+			},
+		}
+		local refused, refusedReason =
+			Permission.subjectAuthority(authority(routes), credential { "read", "write" }, "10", "4242")
+		expect(refused):toBe(nil)
+		expect(refusedReason):toBe "universe ownership is not the required group"
+		local options = authority(routes)
+		options.allowedVisibilities = { "PRIVATE", "PUBLIC" }
+		local receipt, reason = Permission.subjectAuthority(options, credential { "read", "write" }, "10", "4242")
+		expect(reason):toBe "bound"
+		expect(assert(receipt).decision):toBe(Permission.DECISIONS.bound)
+	end)
+
 	it("reports an absent membership as a refusal receipt rather than a fault", function()
 		local options = authority {
 			["/universes/10"] = { path = "universes/10", group = "groups/4242", visibility = "PRIVATE" },
