@@ -5,7 +5,7 @@ Generate owns deterministic asset records, image preparation and Roblox delivery
 | Boundary | Responsibility |
 | --- | --- |
 | `src/core` | Briefs, plans, review and provenance bindings, receipts, manifests, destinations and revision records. |
-| `src/image` | Pixel codecs, measurement, deterministic resizing, metrics and blind review staging. |
+| `src/image` | The PNG codec, the pixel codec interface, measurement, deterministic resizing, metrics and blind review staging. |
 | `src/roblox` | Reviewed file/native delivery, destinations, readback, permissions, auditing and binary model reading. |
 
 Core imports no provider, filesystem, engine or scene framework. `tools/check-boundary.luau` enforces this rule.

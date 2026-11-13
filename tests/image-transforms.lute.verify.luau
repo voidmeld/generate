@@ -3,7 +3,7 @@ local Fixture = require "./fixtures/image-codec"
 local Image = require "../src/image"
 local Test = require "./harness"
 local describe, it, expect = Test.describe, Test.it, Test.expect
-local Codec = Fixture.codec
+local Codec = Image.png
 local Deliver = Image.deliver
 local TRANSFORM: Image.DeliverConfig = { codec = Codec, digest = Fixture.digest }
 local function decoded(bytes: string): Image.Image
