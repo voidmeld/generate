@@ -94,6 +94,9 @@ Public types (definitions in [package source](../src/core/init.luau)):
 | Convert an RGB or RGBA image to an RGBA copy | `Image.codec.rgba(image)` |
 | Round a measurement to four decimals | `Image.codec.rounded(value)` |
 | Set the luminance of one pixel in a buffer | `Image.codec.setLuma(pixels, base, wanted)` |
+| Decode an 8-bit RGB or RGBA PNG | `Image.png.decode(bytes)` |
+| Encode RGBA pixels as a PNG | `Image.png.encodeRgba(width, height, sample)` |
+| Read one channel of a decoded pixel | `Image.png.sample(image, x, y, channel)` |
 | `Image.deliver.run` | Public record value; see the package source. |
 | `Image.measure.MEDIA_TYPE` | Public record value; see the package source. |
 | `Image.measure.artifact` | Public record value; see the package source. |

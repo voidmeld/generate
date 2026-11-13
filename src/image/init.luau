@@ -3,6 +3,7 @@
 local Codec = require "./image/codec"
 local Deliver = require "./image/deliver"
 local Measure = require "./image/measure"
+local Png = require "./image/png"
 local Review = require "./image/review"
 
 export type Codec = Codec.Codec
@@ -25,6 +26,7 @@ export type ReviewRequest = Review.Request
 
 return {
 	codec = Codec,
+	png = { decode = Png.decode, encodeRgba = Png.encodeRgba, sample = Png.sample },
 	deliver = { run = Deliver.run },
 	measure = {
 		MEDIA_TYPE = Measure.MEDIA_TYPE,
