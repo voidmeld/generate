@@ -499,6 +499,9 @@ It checks receipt fields `lineage_path`, `reviewer_verdict_receipt` and `image_r
 
 `Roblox.rbxm` reads binary Roblox instance files.
 
+The instance tree retains both `TexturePack` and `TexturePackContent` slots, including empty values.
+An empty slot is distinct from an omitted property; neither proves rendering or asset permissions.
+
 | Task | Call |
 | --- | --- |
 | Test whether bytes are a binary instance file | `Roblox.rbxm.isBinary(bytes)` |

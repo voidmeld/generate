@@ -498,6 +498,14 @@ describe("Roblox.rbxm", function()
 			.. "\1"
 			.. lengthPrefixed "rbxassetid://909"
 			.. lengthPrefixed ""
+		local texturePackContents = i32(0)
+			.. lengthPrefixed "TexturePackContent"
+			.. "\34"
+			.. interleaved { 2, 0 }
+			.. u32(1)
+			.. lengthPrefixed "rbxassetid://910"
+			.. u32(0)
+			.. u32(0)
 		local colorMaps = i32(0)
 			.. lengthPrefixed "ColorMapContent"
 			.. "\34"
@@ -517,6 +525,7 @@ describe("Roblox.rbxm", function()
 			chunk("INST", instFolder),
 			chunk("PROP", names),
 			chunk("PROP", textures),
+			chunk("PROP", texturePackContents),
 			chunk("PROP", colorMaps),
 			chunk("PROP", shared),
 			chunk("PROP", strength),
@@ -555,7 +564,7 @@ describe("Roblox.rbxm", function()
 		local document = Rbxm.read(bytes)
 		expect(document.ok):toBe(true)
 		assert(document.ok == true)
-		expect(document.assetIds):toEqual { 777, 909, 4242, 55501 }
+		expect(document.assetIds):toEqual { 777, 909, 910, 4242, 55501 }
 		expect(#document.classes):toBe(2)
 		expect(document.classes[1].className):toBe "Folder"
 		expect(document.classes[2].className):toBe "SurfaceAppearance"
@@ -567,6 +576,8 @@ describe("Roblox.rbxm", function()
 		expect(byId[4242].kind):toBe "content"
 		expect(byId[4242].className):toBe "SurfaceAppearance"
 		expect(byId[909].kind):toBe "string"
+		expect(byId[910].property):toBe "TexturePackContent"
+		expect(byId[910].kind):toBe "content"
 		expect(byId[777].property):toBe "HSRData"
 		expect(byId[777].kind):toBe "shared"
 		expect(byId[55501].className):toBe "Folder"
@@ -584,9 +595,11 @@ describe("Roblox.rbxm", function()
 		expect(first.parent):toBe(-1)
 		expect(first.content.ColorMapContent):toBe "rbxassetid://4242"
 		expect(first.content.TexturePack):toBe "rbxassetid://909"
+		expect(first.content.TexturePackContent):toBe "rbxassetid://910"
 		local second = tree.instances[2]
 		expect(second.content.ColorMapContent):toBe ""
 		expect(second.content.TexturePack):toBe ""
+		expect(second.content.TexturePackContent):toBe ""
 		expect(tree.instances[3].content.MeshId):toBe "55501"
 		expect(Rbxm.instancePath(tree, 0)):toBe "SurfaceAppearance"
 	end)
@@ -594,6 +607,7 @@ describe("Roblox.rbxm", function()
 	it("names the content-shaped property set both readers share", function()
 		expect(Rbxm.CONTENT_PROPERTY_NAMES.MeshContent):toBe(true)
 		expect(Rbxm.CONTENT_PROPERTY_NAMES.CageMeshContent):toBe(true)
+		expect(Rbxm.CONTENT_PROPERTY_NAMES.TexturePackContent):toBe(true)
 		expect(Rbxm.CONTENT_PROPERTY_NAMES.EmissiveStrength):toBe(nil)
 	end)
 
