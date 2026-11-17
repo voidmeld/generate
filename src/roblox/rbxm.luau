@@ -69,6 +69,7 @@ local CONTENT_PROPERTY_NAMES: { [string]: boolean } = {
 	EmissiveMask = true,
 	EmissiveMaskContent = true,
 	TexturePack = true,
+	TexturePackContent = true,
 	SoundId = true,
 	AnimationId = true,
 	Image = true,
