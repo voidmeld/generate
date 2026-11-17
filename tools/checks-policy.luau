@@ -39,6 +39,7 @@ local productMaterial: { Rule } = {
 		why = "product asset identifier",
 		exempt = {
 			["tests/asset-lane.lute.verify.luau:rbxassetid://909"] = "synthetic fixture content identifier",
+			["tests/asset-lane.lute.verify.luau:rbxassetid://910"] = "synthetic modern texture pack fixture",
 			["tests/asset-lane.lute.verify.luau:rbxassetid://4242"] = "synthetic model reference fixture",
 			["tests/asset-lane.lute.verify.luau:rbxassetid://777"] = "synthetic unexpected model reference",
 			["tests/consumer.verify.luau:rbxassetid://1"] = "consumer diagnostic refusal fixture",
