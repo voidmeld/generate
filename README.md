@@ -60,7 +60,8 @@ Run `lute pkg install --vendor`, ignore `.lpm/`, and alias the vendored copy in 
 return { luau = { aliases = { generate = "./.lpm/generate@<commit>" } } }
 ```
 
-The [quickstart](docs/quickstart.md) covers the first run; [adapters](docs/adapters.md)
+The consumer skill installs with the package at
+`.lpm/generate@<commit>/.agents/skills/generate/SKILL.md`. The [quickstart](docs/quickstart.md) covers the first run; [adapters](docs/adapters.md)
 explains how to connect tools.
 
 ## Documentation

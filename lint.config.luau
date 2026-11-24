@@ -6,7 +6,7 @@ return {
 			ignores = { "build/**", ".lute/**", ".lpm/**", "vendor/**" },
 			globals = {},
 			rulepaths = {
-				".lpm/verify@35c5590efa9fdb9fc12319a7bc9455a81c2d1970/src/checks/lint-rules/global_table_usage.luau",
+				".lpm/verify@2e8cedeb260dd61d29b6f4be51a5fc250254e80b/src/checks/lint-rules/global_table_usage.luau",
 			},
 			ruleconfigs = {
 				global_table_usage = { options = { allow = { "tests/harness/init.luau" } } },
