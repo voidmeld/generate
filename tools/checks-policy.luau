@@ -1,0 +1,66 @@
+--!strict
+
+local Denylist = require "@verify/src/checks/denylist"
+export type Rule = Denylist.Rule
+
+local boundary: { Rule } = {}
+for _, name in
+	{
+		"Roblox",
+		"roblox",
+		"Studio",
+		"studs",
+		"Studs",
+		"universe",
+		"Universe",
+		"witness",
+		"Witness",
+		"mint",
+		"Mint",
+		"GenerationService",
+		"Compose",
+		"Verify",
+		"@std/",
+		"@lute/",
+		"game.",
+		"workspace",
+		"os.clock",
+		"process.run",
+		"task.spawn",
+	}
+do
+	table.insert(boundary, { allMatches = true, pattern = name, plain = true, why = "forbidden host/domain spelling" })
+end
+
+local productMaterial: { Rule } = {
+	{
+		allMatches = true,
+		pattern = "rbxassetid://%d+",
+		why = "product asset identifier",
+		exempt = {
+			["tests/asset-lane.lute.verify.luau:rbxassetid://909"] = "synthetic fixture content identifier",
+			["tests/asset-lane.lute.verify.luau:rbxassetid://910"] = "synthetic modern texture pack fixture",
+			["tests/asset-lane.lute.verify.luau:rbxassetid://4242"] = "synthetic model reference fixture",
+			["tests/asset-lane.lute.verify.luau:rbxassetid://777"] = "synthetic unexpected model reference",
+			["tests/consumer.verify.luau:rbxassetid://1"] = "consumer diagnostic refusal fixture",
+		},
+	},
+	{ allMatches = true, pattern = "rbxthumb://", why = "product asset identifier" },
+
+	{
+		allMatches = true,
+		pattern = "%f[%w_]placeId%s*=%s*[1-9]%d*",
+		why = "product place identifier",
+	},
+	{
+		allMatches = true,
+		pattern = "%f[%w_]universeId%s*=%s*[1-9]%d*",
+		why = "product universe identifier",
+	},
+}
+
+return {
+	boundary = boundary,
+	leakage = productMaterial,
+	selfPath = "tools/checks-policy.luau",
+}

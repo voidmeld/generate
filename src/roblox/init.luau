@@ -1,0 +1,74 @@
+--!strict
+
+local AssetAudit = require "./roblox/asset-audit"
+local AssetReadback = require "./roblox/asset-readback"
+local Delivery = require "./roblox/delivery"
+local PermissionGrant = require "./roblox/permission-grant"
+local Destination = require "./roblox/destination"
+local Rbxm = require "./roblox/rbxm"
+local PermissionRequestModule = require "./roblox/permission-request"
+local Wire = require "./roblox/wire"
+
+export type AssetAuditFiles = AssetAudit.Files
+export type AssetAuditConfig = AssetAudit.Config
+export type AssetAuditInput = AssetAudit.Input
+export type AssetAuditReference = AssetAudit.Reference
+export type AssetAuditModel = AssetAudit.Model
+export type AssetReadbackOptions = AssetReadback.Options
+export type AssetReadbackOwner = AssetReadback.Owner
+export type AssetRecord = AssetReadback.Record
+export type AssetCensus = AssetReadback.Census
+export type DeliveryAuthority = Delivery.Authority
+export type DeliveryAttributeInstance = Delivery.AttributeInstance
+export type DeliveryAttributeJson = Delivery.AttributeJson
+export type DeliveryConfig = Delivery.Config
+export type DeliveryResult = Delivery.Result
+export type DeliveryRecord = Delivery.Record
+export type DeliveryStore = Delivery.Store
+export type DeliveryReview = Delivery.Review
+export type DeliveryCreator = Delivery.Creator
+export type DeliveryRequest = Delivery.Request
+export type DeliveryReply = Delivery.Reply
+export type DeliveryUpload = Delivery.UploadRequest
+export type DeliveryItem = Delivery.Item
+export type DeliveryRow = Delivery.Row
+export type DeliveryQueueResult = Delivery.QueueResult
+export type DeliveryNativeHost = Delivery.NativeHost
+export type DeliveryNativeRequest = Delivery.NativeRequest
+export type PermissionAuthorityOptions = PermissionGrant.AuthorityOptions
+export type PermissionCredential = PermissionGrant.Credential
+export type PermissionAssignedRole = PermissionGrant.AssignedRole
+export type PermissionChunkOutcome = PermissionGrant.ChunkOutcome
+export type PermissionAuthorityReceipt = PermissionGrant.AuthorityReceipt
+export type PermissionPatch = PermissionGrant.Patch
+export type RbxmClass = Rbxm.Class
+export type RbxmDocument = Rbxm.Document
+export type RbxmInstance = Rbxm.Instance
+export type RbxmReference = Rbxm.Reference
+export type RbxmTree = Rbxm.Tree
+export type PermissionRequest = PermissionRequestModule.Request
+export type PermissionRequestResult = PermissionRequestModule.Result
+export type CloudRequest = Wire.AuthorizedRequest
+export type CloudResponse = Wire.Response
+export type CloudSend = Wire.SendAuthorized
+export type Destination = Destination.DestinationFields
+export type DestinationDraft = Destination.DestinationDraft
+return {
+	assetAudit = AssetAudit,
+	assetReadback = {
+		SOURCES = AssetReadback.SOURCES,
+		UNOBSERVABLE = AssetReadback.UNOBSERVABLE,
+		readback = AssetReadback.readback,
+		census = AssetReadback.census,
+	},
+	delivery = Delivery,
+	permissionGrant = PermissionGrant,
+	destination = Destination.create,
+	readDestination = Destination.read,
+	rbxm = {
+		read = Rbxm.read,
+		instances = Rbxm.instances,
+		instancePath = Rbxm.instancePath,
+		isBinary = Rbxm.isBinary,
+	},
+}

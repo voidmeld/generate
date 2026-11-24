@@ -1,0 +1,135 @@
+--!strict
+
+local fs = require "@std/fs"
+local process = require "@lute/process"
+
+local installed = process.run { "lute", "pkg", "install", "--vendor", "--locked" }
+assert(installed.ok, "gate: lute pkg install --vendor --locked failed:\n" .. installed.stdout .. installed.stderr)
+
+local Lock = require "../pkg.lock"
+local VERIFY_ROOT = ".lpm/" .. Lock.devDependencies.verify
+
+local Gate = require "@verify/src/gate"
+local Lute = require "@verify/src/lute"
+
+local USAGE =
+	"usage: lute run tools/gate.luau [--benchmark] [--only producer]... [--tier name]... [--case id]... [--file spec]... [--name text] [--rerun] [--explain id] [--list]"
+local DIRECTORY = ".lute/tmp/generate-gate"
+local SOURCES = { "src", "tests", "tools", "bench", "examples", "pkg.luau", ".config.luau" }
+
+local benchmark = false
+local flags: { string } = {}
+for index = 2, #process.args do
+	if process.args[index] == "--benchmark" then
+		benchmark = true
+	else
+		table.insert(flags, process.args[index])
+	end
+end
+
+if #flags == 0 then
+	local status = process.run { "git", "status", "--porcelain" }
+	if not status.ok or string.match(status.stdout, "%S") ~= nil then
+		print "gate: full candidate requires a clean committed HEAD; use focused checks while editing, then commit before the full gate"
+		process.exit(1)
+	end
+end
+
+local function discover(root: string, pattern: string): { string }
+	local found = Lute.corpus.discover {
+		listDir = fs.listDirectory,
+		rules = { { root = root, pattern = pattern } },
+	}
+	assert(#found > 0, "corpus is empty: " .. root)
+	return found
+end
+
+local specs = require "./test-manifest"
+assert(#specs > 0, "the test manifest names no specification")
+local examples = discover("examples", "%.luau$")
+
+local function check(id: string, argv: { string }, tier: string): Gate.ProducerDraft
+	return { id = id, kind = "command", argv = argv, tier = tier }
+end
+
+local format: { string } = { "stylua", "--check", "lint.config.luau" }
+local lint: { string } = { "lute", "lint", "--verbose", "-c", "lint.config.luau" }
+local types: { string } = {
+	"luau-lsp",
+	"analyze",
+	"--flag:LuauSolverV2=true",
+	"--platform=standard",
+	"--ignore=**/.lute/**",
+	"--ignore=**/.lpm/**",
+	"--ignore=**/build/**",
+	"lint.config.luau",
+}
+for _, source in SOURCES do
+	table.insert(format, source)
+	table.insert(lint, source)
+	table.insert(types, source)
+end
+
+local producers: { Gate.ProducerDraft } = {
+	check("links", { "lute", "run", "tools/check-links.luau" }, "fast"),
+	check("comments", { "lute", "run", "tools/check-code-comments.luau" }, "fast"),
+	check("leakage", { "lute", "run", "tools/check-leakage.luau" }, "fast"),
+	check("test-manifest", { "lute", "run", "tools/check-test-manifest.luau" }, "fast"),
+	check("verify-check", {
+		"lute",
+		"run",
+		VERIFY_ROOT .. "/tools/verify-check.luau",
+		"--ruleset",
+		"generic",
+		"tests",
+	}, "fast"),
+	{
+		id = "clean-clone",
+		exclusive = true,
+		kind = "command",
+		argv = { "lute", "run", "tools/check-clean-clone.luau" },
+		tier = "slow",
+		deadlineSeconds = 1800,
+		why = "a fresh clone of committed HEAD passes the fast gate without working-tree state",
+	},
+	check("type-policy", { "lute", "run", "tools/check-no-any.luau" }, "fast"),
+	check("spec-style", { "lute", "run", "tools/check-spec-style.luau" }, "fast"),
+	check("format", format, "fast"),
+	check("lint", lint, "fast"),
+	check("types", types, "fast"),
+	{
+		id = "tests",
+		kind = "tests",
+		worker = "tools/test-worker.luau",
+		locators = specs,
+		tier = "fast",
+		why = "the test corpus in tests, run as Verify cases",
+		deadlineSeconds = 1800,
+	},
+	check("boundary", { "lute", "run", "tools/check-boundary.luau" }, "fast"),
+	check("public-surface", { "lute", "run", "tools/check-public-surface.luau" }, "fast"),
+	check("provenance", { "lute", "run", "tools/check-provenance.luau" }, "fast"),
+}
+for _, example in examples do
+	local name = string.gsub(string.gsub(string.sub(example, #"examples/" + 1), "%.luau$", ""), "[^%w]+", "-")
+	table.insert(producers, check("example-" .. name, { "lute", "run", example }, "fast"))
+end
+if benchmark then
+	local producer: Gate.ProducerDraft = {
+		id = "benchmark",
+		kind = "benchmark",
+		benchmark = require "../bench/simple-path",
+		tier = "benchmark",
+		why = "measures record fingerprinting and encoding; records raw samples and applies no budget",
+	}
+	table.insert(producers, producer)
+end
+
+local exitCode = Lute.gate.cli({
+	id = "generate-gate",
+	producers = producers,
+	policy = { commandDeadlineSeconds = 900, deadlineSeconds = 3600 },
+}, flags, { usage = USAGE, options = { directory = DIRECTORY } })
+if exitCode ~= 0 then
+	process.exit(exitCode)
+end
